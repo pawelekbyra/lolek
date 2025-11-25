@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/google": "^2.0.43",
     "@google/generative-ai": "^0.24.1",
     "ai": "^5.0.102",
     "autoprefixer": "^10.4.21",
