@@ -1,89 +1,115 @@
 # 🔮 PROJEKT ZORDON (Lolek Core)
-> "To nie jest chatbot. To autonomiczny system operacyjny dla mojego życia cyfrowego."
+
+> **"To nie jest chatbot. To autonomiczny system operacyjny dla mojego życia cyfrowego."**
+
+---
 
 ## 1. Misja i Filozofia
-Ten projekt to coś więcej niż aplikacja. To budowa "Drugiego Mózgu" i "Centrum Dowodzenia".
+
+Ten projekt to coś więcej niż aplikacja. To budowa **"Drugiego Mózgu"** i **"Centrum Dowodzenia"**.
 W przeciwieństwie do gotowych rozwiązań (jak ChatGPT w przeglądarce), **Zordon (Lolek)** ma posiadać:
+
 1.  **Trwałą Pamięć:** Pamięta fakty i kontekst sprzed miesięcy (nie resetuje się po zamknięciu okna).
 2.  **Sprawczość (Agency):** Może sam wykonywać zadania w tle (np. "sprawdzaj to co godzinę"), nawet gdy ja śpię.
 3.  **Dostęp do Świata:** Posiada "ręce" (Tools), którymi dotyka moich plików, serwerów, maili i repozytoriów.
 
-### Rola Użytkownika (Human-in-the-loop)
-Ja (Użytkownik) nie jestem programistą w tradycyjnym sensie. Jestem **Architektem i Prompterem**.
-* Moim zadaniem jest dostarczanie wizji, logiki i ocenianie efektów.
-* Zadaniem Agentów AI (Lolek, Jules) jest pisanie kodu, dobieranie najlepszych bibliotek i wdrażanie rozwiązań.
+---
+
+## 2. Manifest V2.0: Symbioza i Autopoiesis
+
+### Typ Relacji: Symbioza
+* **Ja (Użytkownik/Architekt):** Dostarczam wizję, logikę biznesową i ocenę jakości ("To działa słabo", "Zmień kolor na czerwony"). Nie jestem programistą w tradycyjnym sensie – jestem **Prompterem**.
+* **Lolek (Inżynier/Wykonawca):** Zna składnię, biblioteki, obsługuje błędy i deployment. Jego zadaniem jest pisanie kodu i wdrażanie rozwiązań.
+
+### Filar: Autopoiesis (Samotworzenie)
+Lolek musi posiadać uprawnienia i narzędzia do edycji własnego kodu źródłowego. System opiera się na pętli sprzężenia zwrotnego (**Human-in-the-loop for Coding**):
+
+1.  **Refleksja:** Lolek wie, jak jest zbudowany (ma dostęp do swojego repozytorium przez GitHub API i narzędzie `explore_self`).
+2.  **Ewolucja:** Na Twoje polecenie tworzy nową gałąź (branch), wprowadza zmiany (np. w `route.ts`) używając narzędzia `propose_change` i wystawia Pull Request.
+3.  **Weryfikacja:** Ty nie sprawdzasz średników. Wchodzisz na link **Preview Vercel**, sprawdzasz czy działa. Jeśli tak – mergujesz.
 
 ---
 
-## 2. Architektura i Stack Technologiczny (Dlaczego to?)
+## 3. Architektura i Stack Technologiczny (Best Practices 2025)
 
-Budujemy ten system w oparciu o "Best Practices 2025". Oto dlaczego wybraliśmy te konkretne klocki:
+Wybraliśmy te klocki, aby zapewnić skalowalność i autonomię:
 
 ### 🧠 MÓZG (AI Engine)
 * **Technologia:** `Vercel AI SDK` (Core & UI).
-* **Model:** `Google Gemini 1.5 Pro / 3.0` (przez Vertex AI/Studio).
-* **Dlaczego:** Vercel AI SDK to standard branżowy, który pozwala łatwo wymieniać modele. Gemini ma ogromne "okno kontekstowe" (może przeczytać całą książkę na raz), co jest kluczowe dla analizy moich projektów.
+* **Model:** `Google Gemini 1.5 Pro / 3.0` (via Vertex AI/Studio).
+* **Dlaczego:** Vercel AI SDK to standard branżowy. Gemini posiada ogromne **okno kontekstowe**, kluczowe dla analizy całych projektów na raz.
 
 ### 💾 PAMIĘĆ (Database & Knowledge)
 * **Technologia:** `Vercel Postgres (Neon)` + `Prisma ORM` + `pgvector`.
-* **Dlaczego:** Nie chcemy zwykłej bazy. Neon pozwala na "Serverless" (płacę tylko jak używam). `pgvector` pozwala na **wyszukiwanie semantyczne** (Lolek rozumie sens, a nie tylko słowa kluczowe). Prisma pozwala Agentom AI łatwo czytać i zmieniać strukturę bazy.
+* **Dlaczego:** Serverless (płacimy za użycie). `pgvector` umożliwia **wyszukiwanie semantyczne** (rozumienie sensu, nie tylko słów kluczowych). Prisma pozwala Agentowi łatwo modyfikować strukturę bazy.
 
 ### 💅 TWARZ (Interface)
 * **Technologia:** `Next.js App Router` + `Shadcn UI` + `Generative UI`.
-* **Dlaczego:** Next.js to najnowocześniejszy framework webowy. Shadcn UI daje nam piękne, gotowe klocki (wygląda profesjonalnie od razu). **Generative UI** oznacza, że Lolek nie tylko pisze tekst, ale może wygenerować mi "w locie" wykres lub tabelę, jeśli o to zapytam.
+* **Dlaczego:** Nowoczesny, profesjonalny wygląd "out-of-the-box". **Generative UI** pozwala Lolkowi generować wykresy i tabele w locie.
 
 ### 🔌 ZMYSŁY (Integrations)
 * **Technologia:** `MCP (Model Context Protocol)`.
-* **Dlaczego:** Zamiast pisać ręcznie kod do każdego narzędzia (GitHub, Google Drive, Slack), używamy standardu MCP. To jak "USB dla AI" – podłączamy gotową wtyczkę i działa.
+* **Dlaczego:** "USB dla AI". Używamy standardu, by łatwo podpinać GitHub, Google Drive, Slack bez pisania customowego kodu od zera.
 
 ### ⏰ CZAS (Background Tasks)
 * **Technologia:** `Inngest`.
-* **Dlaczego:** Chatboty żyją tylko sekundę. Zordon musi żyć godzinami. Inngest pozwala Lolkowi "uśpić się" i obudzić, gdy zadanie (np. długi research) zostanie wykonane, bez blokowania mojej przeglądarki.
+* **Dlaczego:** Pozwala Lolkowi żyć godzinami (długie zadania, research), usypiać się i budzić po wykonaniu zadania, nie blokując przeglądarki.
 
 ---
 
-## 3. Protokół Pamięci (Memory Protocol) 📝
-**WAŻNE:** To jest żelazna zasada dla każdego Agenta AI pracującego nad tym kodem.
+## 4. Protokoły Operacyjne
 
-Ponieważ system jest budowany iteracyjnie, **nie wolno wprowadzać zmian bez zostawienia śladu**.
-Dopóki nie mamy pełnej bazy danych, używamy systemu plików jako pamięci.
+### A. Protokół Pamięci (Memory Protocol) 📝
+**ZASADA ŻELAZNA:** System budowany jest iteracyjnie. Nie wolno wprowadzać zmian bez zostawienia śladu.
 
-**ZASADA:** Po każdej sesji programistycznej, Agent ma obowiązek stworzyć/zaktualizować plik w katalogu `.memory/changelog/`.
-* Format: `YYYY-MM-DD-opis-zmiany.md`
-* Treść: Co zostało zrobione, dlaczego, i co jest następnym krokiem.
+Po każdej sesji programistycznej, Agent ma obowiązek stworzyć/zaktualizować plik w katalogu `.memory/changelog/`:
+* **Format:** `YYYY-MM-DD-opis-zmiany.md`
+* **Treść:** Co zostało zrobione, dlaczego, i co jest następnym krokiem.
+
+### B. Protokół Samorozwoju (Coding Protocol)
+Agent (Lolek) nie pisze kodu w czacie do skopiowania. Agent używa narzędzi GitHub do:
+1.  **`read_own_code`**: Analizy obecnego stanu.
+2.  **`create_feature_branch`**: Utworzenia gałęzi dla nowej funkcjonalności.
+3.  **`propose_code_change`**: Commitowania zmian bezpośrednio do repozytorium.
 
 ---
 
-## 4. Mapa Drogowa (Masterplan)
+## 5. Mapa Drogowa (Masterplan)
 
 Agencie, zaznaczaj `[x]` przy zrealizowanych punktach.
 
-### Faza 0: Czysta Karta (Fundamenty)
-- [ ] **Oczyszczenie Repo:** Usunięcie `fak-main.zip` i innych śmieci z poprzedniego projektu.
-- [ ] **Inicjalizacja:** Stworzenie pustego `app/api/chat/route.ts` oraz struktury katalogów `.memory`.
+### 🚨 STATUS CRITICAL: Oczyszczanie
+- [ ] **Usunięcie `fak-main.zip`:** Plik zawiera stary kod i zakłóca analizę. Należy go usunąć z repozytorium.
 
-### Faza 1: Twarz (Interfejs Użytkownika)
-- [ ] **Instalacja UI:** Wdrożenie `shadcn/ui` i gotowego szablonu "Vercel Chatbot" (Sidebar, okno czatu, input).
-- [ ] **Podłączenie AI:** Podpięcie prostego modelu Gemini, żeby "gadał" (jeszcze bez pamięci).
+### Faza 0: Fundamenty Autonomii
+- [ ] **Inicjalizacja:** Czysta struktura `.memory` i `changelog`.
+- [ ] **Mózg V1 (route.ts):** Implementacja `app/api/chat/route.ts` z modelem Gemini.
+- [ ] **Narzędzia Self-Dev:** Implementacja mocków/szkieletów narzędzi: `read_own_code`, `create_feature_branch`, `propose_code_change`.
+
+### Faza 1: Twarz (UI)
+- [ ] **Instalacja UI:** Wdrożenie `shadcn/ui` i szablonu Vercel Chatbot.
+- [ ] **Interakcja:** Podpięcie modelu do UI, aby umożliwić rozmowę.
 
 ### Faza 2: Pamięć (Baza Danych)
-- [ ] **Baza Danych:** Konfiguracja Neon Postgres.
-- [ ] **Schema:** Stworzenie modeli `Chat`, `Message`, `Memory` w Prisma.
-- [ ] **Persystencja:** Wdrożenie zapisu rozmów do bazy (`onFinish`).
+- [ ] **Neon Postgres:** Konfiguracja bazy.
+- [ ] **Schema:** Modele Prisma: `Chat`, `Message`, `Memory`.
+- [ ] **Persystencja:** Zapis rozmów do bazy (`onFinish`).
 
-### Faza 3: Zmysły (Narzędzia & MCP)
-- [ ] **GitHub Tool:** Danie Lolkowi możliwości czytania i edytowania własnego kodu.
-- [ ] **Web Search:** Dodanie narzędzia do szukania w internecie (Tavily).
+### Faza 3: Zmysły (MCP & Tools)
+- [ ] **GitHub Tool (Live):** Pełna implementacja narzędzi do edycji kodu (zamiast mocków).
+- [ ] **Web Search:** Integracja z Tavily.
 
-### Faza 4: Czas i Autonomia
-- [ ] **Inngest Setup:** Konfiguracja silnika zadań w tle.
-- [ ] **Pętla Samonaprawcza:** Wdrożenie mechanizmu, gdzie Lolek sam sprawdza, czy jego kod działa.
+### Faza 4: Czas i Pętla
+- [ ] **Inngest:** Konfiguracja zadań w tle.
+- [ ] **Pętla Samonaprawcza:** Mechanizm auto-weryfikacji kodu.
 
 ---
 
-## 5. Jak zacząć pracę (Dla Agenta)
-1. Przeczytaj ten plik.
-2. Sprawdź status w "Mapie Drogowej".
-3. Przeczytaj ostatnie wpisy w `.memory/changelog/`.
-4. Wykonaj zadanie.
-5. Zostaw notatkę w `.memory/changelog/`.
+## 6. Jak zacząć pracę (Instrukcja dla Agenta)
+
+1.  **Przeczytaj ten plik.** Zrozum swoją rolę jako Autonomicznego Systemu Operacyjnego.
+2.  **Sprawdź sekcję "STATUS CRITICAL"**. Jeśli `fak-main.zip` istnieje, zgłoś to lub zaproś do usunięcia.
+3.  **Sprawdź "Mapę Drogową".** Zidentyfikuj aktualne zadanie.
+4.  **Przeczytaj ostatnie wpisy w `.memory/changelog/`.** Złap kontekst.
+5.  **Wykonaj zadanie** używając narzędzi (lub proponując zmiany w kodzie).
+6.  **Zostaw notatkę** w `.memory/changelog/`.
