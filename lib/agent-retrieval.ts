@@ -1,20 +1,93 @@
-export async function hybridQueryMemory(query: string, metadataFilter: { dateRange?: [Date, Date], keyword?: string }): Promise<any[]> {
-  // 1. Filtracja Leksykalna/Metadanych (SQL/Prisma)
-  // Użyj prisma.document.findMany lub prisma.semanticMemory.findMany
-  // z filtrem WHERE (np. full-text search na 'keyword' lub filtrem 'dateRange').
+import { getEmbedding } from './embedding';
+import prisma from './prisma';
 
-  // 2. Wyszukiwanie Wektorowe (Semantic Search)
-  // W docelowej implementacji: Konwersja 'query' na wektor (embedding).
-  // Następnie użyj zapytania wektorowego (<->) na wynikach z kroku 1.
+/**
+ * Retrieves context for a given query using a hybrid search approach.
+ *
+ * @param query - The user's query.
+ * @param userId - The ID of the user.
+ * @returns A string containing the aggregated context.
+ */
+export async function retrieveContext(query: string, userId: string): Promise<string> {
+  const embedding = await getEmbedding(query);
 
-  // 3. Łączenie Wyników
-  // Zastosowanie algorytmu łączenia (np. RRF - Reciprocal Rank Fusion)
-  // Zwróć najlepsze, ustrukturyzowane wyniki.
+  // 1. Semantic Search (Vectors)
+  const semanticFacts = await prisma.$queryRaw`
+    SELECT content
+    FROM "SemanticFact"
+    ORDER BY embedding <=> ${embedding}
+    LIMIT 3;
+  `;
 
-  // Tymczasowa implementacja (placeholder - do zastąpienia):
-  console.log(`Wykonuję hybrydowe zapytanie dla: ${query} z filtrem: ${JSON.stringify(metadataFilter)}`);
-  // Zaimplementuj logikę, aby zwrócić puste tablice lub mock data, ale
-  // z precyzyjnymi komentarzami, gdzie należy dodać logikę RAG.
+  // 2. Keyword Search
+  const keywordFacts = await prisma.semanticFact.findMany({
+    where: {
+      content: {
+        contains: query,
+        mode: 'insensitive',
+      },
+    },
+  });
 
-  throw new Error("Funkcja hybridQueryMemory jest placeholderem i wymaga implementacji logiki RAG (SQL + pgvector/RRF).");
+  const keywordMessages = await prisma.message.findMany({
+    where: {
+      content: {
+        contains: query,
+        mode: 'insensitive',
+      },
+      userId: userId,
+    },
+  });
+
+  // 3. Graph Traversal
+  const graphEntities = await prisma.graphEntity.findMany({
+    where: {
+      name: {
+        contains: query,
+        mode: 'insensitive',
+      },
+    },
+    include: {
+      relations: {
+        include: {
+          relatedEntity: true,
+        },
+      },
+    },
+  });
+
+  // 4. Aggregation
+  let context = '';
+
+  if (Array.isArray(semanticFacts) && semanticFacts.length > 0) {
+    context += '[WYSZUKIWANIE WEKTOROWE]\n';
+    semanticFacts.forEach((fact: any) => {
+      context += `- ${fact.content}\n`;
+    });
+  }
+
+  if (keywordFacts.length > 0) {
+    context += '[WYSZUKIWANIE SŁÓW KLUCZOWYCH W FAKTACH]\n';
+    keywordFacts.forEach(fact => {
+      context += `- ${fact.content}\n`;
+    });
+  }
+
+  if (keywordMessages.length > 0) {
+    context += '[WYSZUKIWANIE SŁÓW KLUCZOWYCH W WIADOMOŚCIACH]\n';
+    keywordMessages.forEach(message => {
+      context += `- ${message.content}\n`;
+    });
+  }
+
+  if (graphEntities.length > 0) {
+    context += '[KONTEKST Z GRAFU]\n';
+    graphEntities.forEach(entity => {
+      entity.relations.forEach(relation => {
+        context += `- ${entity.name} ${relation.type} ${relation.relatedEntity.name}\n`;
+      });
+    });
+  }
+
+  return context;
 }

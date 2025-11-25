@@ -65,7 +65,10 @@ export async function getChatMessages(sessionId: string): Promise<any[]> {
         WHERE session_id = ${sessionId}
         ORDER BY created_at ASC;
     `;
-    return result;
+    return result.map(msg => ({
+        role: msg.role,
+        parts: [{ type: 'text', text: msg.content }]
+    }));
 }
 
 export async function addChatMessage(sessionId: string, role: string, content: string): Promise<void> {
