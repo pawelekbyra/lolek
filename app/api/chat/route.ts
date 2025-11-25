@@ -1,66 +1,75 @@
-import { google } from 'ai/google';
-import { streamText, tool } from 'ai';
-import { z } from 'zod';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleAIStream, StreamingTextResponse } from 'ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
 
 export const runtime = 'edge';
-
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
-  const result = await streamText({
-    model: google('gemini-3-pro-previewt'),
-    system: `You are "Lolek", a technical assistant.
-Your primary goal is to expand your own capabilities based on user instructions.
-You can read your own code, create feature branches, and propose code changes.
-When asked to perform an action, use the available tools.
-When you are done with the task, respond with a summary of your actions.`,
-    messages,
-    tools: {
-      read_own_code: tool({
-        description: 'Allows the agent to read a file from its own repository.',
-        parameters: z.object({
-          path: z.string().describe('The path to the file to read.'),
-        }),
-        execute: async ({ path }) => {
-          console.log(`Reading code from: ${path}`);
-          if (!GITHUB_TOKEN) {
-            return { success: false, error: "GITHUB_TOKEN is not set." };
-          }
-          return { success: true, content: `// Mock content of ${path}` };
-        },
-      }),
-      create_feature_branch: tool({
-        description: 'Creates a new git branch for a new feature.',
-        parameters: z.object({
-          branchName: z.string().describe('The name of the new branch.'),
-        }),
-        execute: async ({ branchName }) => {
-          console.log(`Creating feature branch: ${branchName}`);
-          if (!GITHUB_TOKEN) {
-            return { success: false, error: "GITHUB_TOKEN is not set." };
-          }
-          return { success: true, url: `https://github.com/example/repo/tree/${branchName}` };
-        },
-      }),
-      propose_code_change: tool({
-        description: 'Commits a file to a new branch.',
-        parameters: z.object({
-          branchName: z.string().describe('The branch to commit to.'),
-          filePath: z.string().describe('The path of the file to commit.'),
-          content: z.string().describe('The new content of the file.'),
-        }),
-        execute: async ({ branchName, filePath, content }) => {
-          console.log(`Proposing code change to ${filePath} in branch ${branchName} with content: ${content}`);
-          if (!GITHUB_TOKEN) {
-            return { success: false, error: "GITHUB_TOKEN is not set." };
-          }
-          return { success: true, commitUrl: `https://github.com/example/repo/commit/mock_sha` };
-        },
-      }),
-    },
-  });
+  const response = await genAI
+    .getGenerativeModel({ model: 'gemini-pro' })
+    .generateContentStream({
+      contents: messages.map((m: any) => ({
+        role: m.role,
+        parts: [{ text: m.content }],
+      })),
+      // tools: [
+      //   {
+      //     functionDeclarations: [
+      //       {
+      //         name: 'read_own_code',
+      //         description: 'Read the content of a file in the repository.',
+      //         parameters: {
+      //           type: 'object',
+      //           properties: {
+      //             filepath: {
+      //               type: 'string',
+      //               description: 'The path of the file to read.',
+      //             },
+      //           },
+      //           required: ['filepath'],
+      //         },
+      //       },
+      //       {
+      //         name: 'create_feature_branch',
+      //         description: 'Create a new feature branch.',
+      //         parameters: {
+      //           type: 'object',
+      //           properties: {
+      //             branch_name: {
+      //               type: 'string',
+      //               description: 'The name of the new branch.',
+      //             },
+      //           },
+      //           required: ['branch_name'],
+      //         },
+      //       },
+      //       {
+      //         name: 'propose_change',
+      //         description: 'Propose a change to a file.',
+      //         parameters: {
+      //           type: 'object',
+      //           properties: {
+      //             filepath: {
+      //               type: 'string',
+      //               description: 'The path of the file to change.',
+      //             },
+      //             change: {
+      //               type: 'string',
+      //               description: 'The proposed change.',
+      //             },
+      //           },
+      //           required: ['filepath', 'change'],
+      //         },
+      //       },
+      //     ],
+      //   },
+      // ],
+    });
 
-  return result.toAIStreamResponse();
+  const stream = GoogleAIStream(response);
+
+  return new StreamingTextResponse(stream);
 }
