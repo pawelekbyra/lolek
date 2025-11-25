@@ -1,0 +1,153 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  emailVerified  DateTime?
+  password       String?
+  name           String?
+  displayName    String?
+  username       String?   @unique
+  avatarUrl      String?
+  avatar         String?
+  image          String?
+  bio            String?   // User biography/description
+  role           String    @default("user") // "user", "admin", "patron"
+  isFirstLogin   Boolean   @default(false) // Flag indicating if the user needs to complete first login setup
+  emailConsent   Boolean   @default(false)
+  emailLanguage  String?   @default("pl")
+  sessionVersion Int       @default(1)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  conversations  Conversation[]
+  messages       Message[]
+  episodicMemories EpisodicMemory[]
+  semanticMemories SemanticMemory[]
+  documents      Document[]
+  tasks          LongTermTask[]
+  decisionLogs   DecisionLog[]
+
+  @@map("users")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  startTime DateTime @default(now())
+  endTime   DateTime?
+  summary   String?
+  messages  Message[]
+
+  @@index([userId, startTime])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  role           String       // "user", "assistant", "system"
+  content        String       @db.Text
+  timestamp      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+model EpisodicMemory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  content     String   @db.Text
+  timestamp   DateTime @default(now())
+  importance  Float
+
+  @@index([userId, timestamp])
+}
+
+model SemanticMemory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  content     String   @db.Text
+  embedding   Unsupported("vector(1536)")
+  source      String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model ProceduralMemory {
+  id          String   @id @default(cuid())
+  toolId      String
+  tool        Tool     @relation(fields: [toolId], references: [id])
+  steps       String   @db.Text
+  description String?
+
+  @@unique([toolId])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  content     String   @db.Text
+  embedding   Unsupported("vector(1536)")
+  source      String
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model LongTermTask {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  description   String
+  status        String      // "pending", "in_progress", "completed", "failed"
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  decisionLogs  DecisionLog[]
+
+  @@index([userId, status])
+}
+
+model DecisionLog {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  taskId      String?
+  task        LongTermTask? @relation(fields: [taskId], references: [id])
+  decision    String        @db.Text
+  timestamp   DateTime      @default(now())
+
+  @@index([userId, taskId])
+}
+
+model Tool {
+  id            String            @id @default(cuid())
+  name          String            @unique
+  description   String
+  credentials   Credential[]
+  proceduralMemory ProceduralMemory?
+}
+
+model Credential {
+  id            String @id @default(cuid())
+  toolId        String
+  tool          Tool   @relation(fields: [toolId], references: [id])
+  accessToken   String
+  refreshToken  String?
+  expiresAt     DateTime?
+
+  @@unique([toolId])
+}

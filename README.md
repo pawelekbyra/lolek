@@ -116,3 +116,37 @@ Agencie, zaznaczaj `[x]` przy zrealizowanych punktach.
 4.  **Przeczytaj ostatnie wpisy w `.memory/changelog/`.** Złap kontekst.
 5.  **Wykonaj zadanie** używając narzędzi (lub proponując zmiany w kodzie zgodnie z Protokołem Samorozwoju).
 6.  **Zostaw notatkę** w `.memory/changelog/`.
+
+---
+
+## 7. Environment Variables
+
+### Database Connection
+
+# Recommended for most uses
+DATABASE_URL=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
+
+# For uses requiring a connection without pgbouncer
+DATABASE_URL_UNPOOLED=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
+
+# Parameters for constructing your own connection string
+PGHOST=ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech
+PGHOST_UNPOOLED=ep-cool-queen-agrokii4.c-2.eu-central-1.aws.neon.tech
+PGUSER=neondb_owner
+PGDATABASE=neondb
+PGPASSWORD=npg_jCnoW3hqtal2
+
+# Parameters for Vercel Postgres Templates
+POSTGRES_URL=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
+POSTGRES_URL_NON_POOLING=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
+POSTGRES_USER=neondb_owner
+POSTGRES_HOST=ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech
+POSTGRES_PASSWORD=npg_jCnoW3hqtal2
+POSTGRES_DATABASE=neondb
+POSTGRES_URL_NO_SSL=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech/neondb
+POSTGRES_PRISMA_URL=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?connect_timeout=15&sslmode=require
+
+# Neon Auth environment variables for Next.js
+NEXT_PUBLIC_STACK_PROJECT_ID=****************************
+NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY=****************************************
+STACK_SECRET_SERVER_KEY=***********************
