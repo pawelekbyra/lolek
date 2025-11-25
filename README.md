@@ -38,10 +38,11 @@ Wybraliśmy te klocki, aby zapewnić skalowalność i autonomię:
 * **Technologia:** `Vercel AI SDK` (Core & UI).
 * **Model:** `Google Gemini 1.5 Pro / 3.0` (via Vertex AI/Studio).
 * **Dlaczego:** Vercel AI SDK to standard branżowy. Gemini posiada ogromne **okno kontekstowe**, kluczowe dla analizy całych projektów na raz.
+    * **UWAGA:** Do definicji narzędzi (Tools) używamy standardowego API, które obsługuje **Function Calling/Tool Calling**, zgodnie z zaleceniami Vercel AI SDK.
 
 ### 💾 PAMIĘĆ (Database & Knowledge)
 * **Technologia:** `Vercel Postgres (Neon)` + `Prisma ORM` + `pgvector`.
-* **Dlaczego:** Serverless (płacimy za użycie). `pgvector` umożliwia **wyszukiwanie semantyczne** (rozumienie sensu, nie tylko słów kluczowych). Prisma pozwala Agentowi łatwo modyfikować strukturę bazy.
+* **Dlaczego:** Serverless (płacimy za użycie). **`pgvector`** umożliwia **wyszukiwanie semantyczne (RAG)**, kluczowe dla pamięci długoterminowej i analizy wgranych dokumentów (PDF/Docs). Prisma pozwala Agentowi łatwo modyfikować strukturę bazy.
 
 ### 💅 TWARZ (Interface)
 * **Technologia:** `Next.js App Router` + `Shadcn UI` + `Generative UI`.
@@ -85,23 +86,25 @@ Agencie, zaznaczaj `[x]` przy zrealizowanych punktach.
 - [ ] **Inicjalizacja:** Czysta struktura `.memory` i `changelog`.
 - [ ] **Mózg V1 (route.ts):** Implementacja `app/api/chat/route.ts` z modelem Gemini.
 - [ ] **Narzędzia Self-Dev:** Implementacja mocków/szkieletów narzędzi: `read_own_code`, `create_feature_branch`, `propose_code_change`.
+- [ ] **Tool Calling/Function Calling:** Definicja pierwszych narzędzi (Tools) w `route.ts` przy użyciu Vercel AI SDK. To jest kluczowe dla nadania Lolkowi **sprawczości**.
 
 ### Faza 1: Twarz (UI)
 - [ ] **Instalacja UI:** Wdrożenie `shadcn/ui` i szablonu Vercel Chatbot.
 - [ ] **Interakcja:** Podpięcie modelu do UI, aby umożliwić rozmowę.
 
-### Faza 2: Pamięć (Baza Danych)
-- [ ] **Neon Postgres:** Konfiguracja bazy.
-- [ ] **Schema:** Modele Prisma: `Chat`, `Message`, `Memory`.
-- [ ] **Persystencja:** Zapis rozmów do bazy (`onFinish`).
+### Faza 2: Pamięć Długotrwała (Pgvector)
+- [ ] **Neon Postgres & Rozszerzenie:** Włączenie rozszerzenia **`vector`** w bazie Neon Postgres.
+- [ ] **Schema `pgvector`:** Aktualizacja schematu Prisma (model np. `Document` lub `Memory`), dodanie pola `Unsupported("vector")` do przechowywania osadzeń.
+- [ ] **Persystencja Rozmów:** Zapis rozmów do bazy (`onFinish`).
 
-### Faza 3: Zmysły (MCP & Tools)
-- [ ] **GitHub Tool (Live):** Pełna implementacja narzędzi do edycji kodu (zamiast mocków).
+### Faza 3: Zmysły (MCP & Integracje)
+- [ ] **GitHub Tool (Live):** Pełna implementacja narzędzi do edycji kodu (zamiast mocków) – np. użycie Octokit/GitHub API.
 - [ ] **Web Search:** Integracja z Tavily.
+- [ ] **Przeglądarka (Playwright/Puppeteer):** Wdrożenie `Tool` o nazwie np. `browseWeb(url)` pozwalającego Lolkowi na realne przeglądanie stron internetowych i pobieranie danych.
 
 ### Faza 4: Czas i Pętla
 - [ ] **Inngest:** Konfiguracja zadań w tle.
-- [ ] **Pętla Samonaprawcza:** Mechanizm auto-weryfikacji kodu.
+- [ ] **Pętla Samonaprawcza:** Mechanizm auto-weryfikacji kodu (Lolek weryfikuje własne zmiany).
 
 ---
 
@@ -109,7 +112,7 @@ Agencie, zaznaczaj `[x]` przy zrealizowanych punktach.
 
 1.  **Przeczytaj ten plik.** Zrozum swoją rolę jako Autonomicznego Systemu Operacyjnego.
 2.  **Sprawdź sekcję "STATUS CRITICAL"**. Jeśli `fak-main.zip` istnieje, zgłoś to lub zaproś do usunięcia.
-3.  **Sprawdź "Mapę Drogową".** Zidentyfikuj aktualne zadanie.
+3.  **Sprawdź "Mapę Drogową".** Zidentyfikuj aktualne, niezrealizowane zadanie.
 4.  **Przeczytaj ostatnie wpisy w `.memory/changelog/`.** Złap kontekst.
-5.  **Wykonaj zadanie** używając narzędzi (lub proponując zmiany w kodzie).
+5.  **Wykonaj zadanie** używając narzędzi (lub proponując zmiany w kodzie zgodnie z Protokołem Samorozwoju).
 6.  **Zostaw notatkę** w `.memory/changelog/`.
