@@ -33,32 +33,17 @@ export async function POST(req: Request) {
 
     const { messages, session_id: sessionId }: { messages: UIMessage[], session_id: string } = await req.json();
 
-    // Process multimodal messages
-    const processedMessages = messages.map(message => {
-      if (typeof message.content === 'string') {
-        return {
-          ...message,
-          content: [{ type: 'text', text: message.content }],
-        };
-      }
-      return message;
-    });
-
     // Fetch chat history from the database
-    const chatHistory = await getChatMessages(sessionId);
-    const initialMessages = chatHistory.map(msg => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    const initialMessages = await getChatMessages(sessionId);
 
     const result = streamText({
       model: google('gemini-3-pro-preview'),
       system,
-      messages: [...convertToCoreMessages(initialMessages), ...convertToCoreMessages(processedMessages)],
+      messages: [...convertToCoreMessages(initialMessages), ...convertToCoreMessages(messages)],
       onFinish: async ({ text }) => {
         // Save the user message and the assistant's response to the database
-        const lastUserMessage = processedMessages[processedMessages.length - 1];
-        const lastUserMessageContent = (lastUserMessage.content as any[])
+        const lastUserMessage = messages[messages.length - 1];
+        const lastUserMessageContent = (lastUserMessage.parts as any[])
           .map(part => (part.type === 'text' ? part.text : '[image]'))
           .join(' ');
         await addChatMessage(sessionId, 'user', lastUserMessageContent);

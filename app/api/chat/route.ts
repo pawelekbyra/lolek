@@ -65,6 +65,17 @@ When you are done with the task, respond with a summary of your actions.`,
           return { success: true, commitUrl: 'https://github.com/example/repo/commit/mock_sha' };
         },
       },
+      execute_python_code: {
+        description: 'Executes Python code in a sandboxed environment.',
+        inputSchema: z.object({
+          code: z.string().describe('The Python code to execute.'),
+        }),
+        execute: async ({ code }) => {
+          console.log(`Executing Python code: ${code}`);
+          // In a real implementation, this would call the E2B sandbox.
+          return { success: true, stdout: 'Hello from Python!', stderr: '' };
+        },
+      },
     },
   });
 
