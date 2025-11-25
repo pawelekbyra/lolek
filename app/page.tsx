@@ -1,9 +1,9 @@
-import Chatbot from '@/components/Chatbot';
+import LolekChat from '@/components/LolekChat';
 
 export default function HomePage() {
   return (
     <main>
-      <Chatbot />
+      <LolekChat />
     </main>
   );
 }
