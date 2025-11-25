@@ -1,152 +1,21 @@
-# 🔮 PROJEKT ZORDON (Lolek Core)
+Lolek - Autonomiczny Agent AI (Next.js + Vercel AI SDK)Lolek to zaawansowany agent AI zbudowany w oparciu o najnowsze standardy (State-of-the-Art 2025). Projekt wykorzystuje architekturę Generative UI 2.0, hybrydową pamięć GraphRAG oraz bezpieczne środowisko wykonywania kodu (Sandbox).🚀 Quick StartZainstaluj zależności:npm install
+# lub
+yarn install
+# lub
+pnpm install
+Skonfiguruj zmienne środowiskowe:Skopiuj .env.example do .env.local i uzupełnij klucze (OpenAI/Gemini, Postgres, E2B, etc.).Uruchom serwer deweloperski:npm run dev
+Otwórz http://localhost:3000 w przeglądarce.🧭 Kompas Technologiczny (Strategia 2025)Poniższa sekcja definiuje "Złoty Standard" konfiguracji dla agenta Lolek, oparty o analizę architektury systemów autonomicznych.1. FUNDAMENT: Generative UI (GenUI) 2.0Cel: Pełna interaktywność i eliminacja migotania interfejsu.Zamiast renderowania po stronie serwera (streamUI), projekt migruje na Client-Side Tool Rendering.Mechanizm: Hook useChat z Vercel AI SDK po stronie klienta.Przepływ:Model decyduje o wywołaniu narzędzia (np. showWeather).Serwer zwraca dane JSON + intencję.Klient (React) renderuje komponent wizualny (np. <WeatherCard />) w miejscu wywołania.// Wzorzec implementacji w LolekChat.tsx
+const { messages } = useChat();
 
-> **"To nie jest chatbot. To autonomiczny system operacyjny dla mojego życia cyfrowego."**
-
----
-
-## 1. Misja i Filozofia
-
-Ten projekt to coś więcej niż aplikacja. To budowa **"Drugiego Mózgu"** i **"Centrum Dowodzenia"**.
-W przeciwieństwie do gotowych rozwiązań (jak ChatGPT w przeglądarce), **Zordon (Lolek)** ma posiadać:
-
-1.  **Trwałą Pamięć:** Pamięta fakty i kontekst sprzed miesięcy (nie resetuje się po zamknięciu okna).
-2.  **Sprawczość (Agency):** Może sam wykonywać zadania w tle (np. "sprawdzaj to co godzinę"), nawet gdy ja śpię.
-3.  **Dostęp do Świata:** Posiada "ręce" (Tools), którymi dotyka moich plików, serwerów, maili i repozytoriów.
-
----
-
-## 2. Manifest V2.0: Symbioza i Autopoiesis
-
-### Typ Relacji: Symbioza
-* **Ja (Użytkownik/Architekt):** Dostarczam wizję, logikę biznesową i ocenę jakości ("To działa słabo", "Zmień kolor na czerwony"). Nie jestem programistą w tradycyjnym sensie – jestem **Prompterem**.
-* **Lolek (Inżynier/Wykonawca):** Zna składnię, biblioteki, obsługuje błędy i deployment. Jego zadaniem jest pisanie kodu i wdrażanie rozwiązań.
-
-### Filar: Autopoiesis (Samotworzenie)
-Lolek musi posiadać uprawnienia i narzędzia do edycji własnego kodu źródłowego. System opiera się na pętli sprzężenia zwrotnego (**Human-in-the-loop for Coding**):
-
-1.  **Refleksja:** Lolek wie, jak jest zbudowany (ma dostęp do swojego repozytorium przez GitHub API i narzędzie `explore_self`).
-2.  **Ewolucja:** Na Twoje polecenie tworzy nową gałąź (branch), wprowadza zmiany (np. w `route.ts`) używając narzędzia `propose_change` i wystawia Pull Request.
-3.  **Weryfikacja:** Ty nie sprawdzasz średników. Wchodzisz na link **Preview Vercel**, sprawdzasz czy działa. Jeśli tak – mergujesz.
-
----
-
-## 3. Architektura i Stack Technologiczny (Best Practices 2025)
-
-Wybraliśmy te klocki, aby zapewnić skalowalność i autonomię:
-
-### 🧠 MÓZG (AI Engine)
-* **Technologia:** `Vercel AI SDK` (Core & UI).
-* **Model:** `Google Gemini 1.5 Pro / 3.0` (via Vertex AI/Studio).
-* **Dlaczego:** Vercel AI SDK to standard branżowy. Gemini posiada ogromne **okno kontekstowe**, kluczowe dla analizy całych projektów na raz.
-    * **UWAGA:** Do definicji narzędzi (Tools) używamy standardowego API, które obsługuje **Function Calling/Tool Calling**, zgodnie z zaleceniami Vercel AI SDK.
-
-### 💾 PAMIĘĆ (Database & Knowledge)
-* **Technologia:** `Vercel Postgres (Neon)` + `Prisma ORM` + `pgvector`.
-* **Dlaczego:** Serverless (płacimy za użycie). **`pgvector`** umożliwia **wyszukiwanie semantyczne (RAG)**, kluczowe dla pamięci długoterminowej i analizy wgranych dokumentów (PDF/Docs). Prisma pozwala Agentowi łatwo modyfikować strukturę bazy.
-
-### 💅 TWARZ (Interface)
-* **Technologia:** `Next.js App Router` + `Shadcn UI` + `Generative UI`.
-* **Dlaczego:** Nowoczesny, profesjonalny wygląd "out-of-the-box". **Generative UI** pozwala Lolkowi generować wykresy i tabele w locie.
-
-### 🔌 ZMYSŁY (Integrations)
-* **Technologia:** `MCP (Model Context Protocol)`.
-* **Dlaczego:** "USB dla AI". Używamy standardu, by łatwo podpinać GitHub, Google Drive, Slack bez pisania customowego kodu od zera.
-
-### ⏰ CZAS (Background Tasks)
-* **Technologia:** `Inngest`.
-* **Dlaczego:** Pozwala Lolkowi żyć godzinami (długie zadania, research), usypiać się i budzić po wykonaniu zadania, nie blokując przeglądarki.
-
----
-
-## 4. Protokoły Operacyjne
-
-### A. Protokół Pamięci (Memory Protocol) 📝
-**ZASADA ŻELAZNA:** System budowany jest iteracyjnie. Nie wolno wprowadzać zmian bez zostawienia śladu.
-
-Po każdej sesji programistycznej, Agent ma obowiązek stworzyć/zaktualizować plik w katalogu `.memory/changelog/`:
-* **Format:** `YYYY-MM-DD-opis-zmiany.md`
-* **Treść:** Co zostało zrobione, dlaczego, i co jest następnym krokiem.
-
-### B. Protokół Samorozwoju (Coding Protocol)
-Agent (Lolek) nie pisze kodu w czacie do skopiowania. Agent używa narzędzi GitHub do:
-1.  **`read_own_code`**: Analizy obecnego stanu.
-2.  **`create_feature_branch`**: Utworzenia gałęzi dla nowej funkcjonalności.
-3.  **`propose_code_change`**: Commitowania zmian bezpośrednio do repozytorium.
-
----
-
-## 5. Mapa Drogowa (Masterplan)
-
-Agencie, zaznaczaj `[x]` przy zrealizowanych punktach.
-
-### 🚨 STATUS CRITICAL: Oczyszczanie
-- [ ] **Usunięcie `fak-main.zip`:** Plik zawiera stary kod i zakłóca analizę. Należy go usunąć z repozytorium.
-
-### Faza 0: Fundamenty Autonomii
-- [ ] **Inicjalizacja:** Czysta struktura `.memory` i `changelog`.
-- [ ] **Mózg V1 (route.ts):** Implementacja `app/api/chat/route.ts` z modelem Gemini.
-- [ ] **Narzędzia Self-Dev:** Implementacja mocków/szkieletów narzędzi: `read_own_code`, `create_feature_branch`, `propose_code_change`.
-- [ ] **Tool Calling/Function Calling:** Definicja pierwszych narzędzi (Tools) w `route.ts` przy użyciu Vercel AI SDK. To jest kluczowe dla nadania Lolkowi **sprawczości**.
-
-### Faza 1: Twarz (UI)
-- [ ] **Instalacja UI:** Wdrożenie `shadcn/ui` i szablonu Vercel Chatbot.
-- [ ] **Interakcja:** Podpięcie modelu do UI, aby umożliwić rozmowę.
-
-### Faza 2: Pamięć Długotrwała (Pgvector)
-- [ ] **Neon Postgres & Rozszerzenie:** Włączenie rozszerzenia **`vector`** w bazie Neon Postgres.
-- [ ] **Schema `pgvector`:** Aktualizacja schematu Prisma (model np. `Document` lub `Memory`), dodanie pola `Unsupported("vector")` do przechowywania osadzeń.
-- [ ] **Persystencja Rozmów:** Zapis rozmów do bazy (`onFinish`).
-
-### Faza 3: Zmysły (MCP & Integracje)
-- [ ] **GitHub Tool (Live):** Pełna implementacja narzędzi do edycji kodu (zamiast mocków) – np. użycie Octokit/GitHub API.
-- [ ] **Web Search:** Integracja z Tavily.
-- [ ] **Przeglądarka (Playwright/Puppeteer):** Wdrożenie `Tool` o nazwie np. `browseWeb(url)` pozwalającego Lolkowi na realne przeglądanie stron internetowych i pobieranie danych.
-
-### Faza 4: Czas i Pętla
-- [ ] **Inngest:** Konfiguracja zadań w tle.
-- [ ] **Pętla Samonaprawcza:** Mechanizm auto-weryfikacji kodu (Lolek weryfikuje własne zmiany).
-
----
-
-## 6. Jak zacząć pracę (Instrukcja dla Agenta)
-
-1.  **Przeczytaj ten plik.** Zrozum swoją rolę jako Autonomicznego Systemu Operacyjnego.
-2.  **Sprawdź sekcję "STATUS CRITICAL"**. Jeśli `fak-main.zip` istnieje, zgłoś to lub zaproś do usunięcia.
-3.  **Sprawdź "Mapę Drogową".** Zidentyfikuj aktualne, niezrealizowane zadanie.
-4.  **Przeczytaj ostatnie wpisy w `.memory/changelog/`.** Złap kontekst.
-5.  **Wykonaj zadanie** używając narzędzi (lub proponując zmiany w kodzie zgodnie z Protokołem Samorozwoju).
-6.  **Zostaw notatkę** w `.memory/changelog/`.
-
----
-
-## 7. Environment Variables
-
-### Database Connection
-
-# Recommended for most uses
-DATABASE_URL=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
-
-# For uses requiring a connection without pgbouncer
-DATABASE_URL_UNPOOLED=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
-
-# Parameters for constructing your own connection string
-PGHOST=ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech
-PGHOST_UNPOOLED=ep-cool-queen-agrokii4.c-2.eu-central-1.aws.neon.tech
-PGUSER=neondb_owner
-PGDATABASE=neondb
-PGPASSWORD=npg_jCnoW3hqtal2
-
-# Parameters for Vercel Postgres Templates
-POSTGRES_URL=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
-POSTGRES_URL_NON_POOLING=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
-POSTGRES_USER=neondb_owner
-POSTGRES_HOST=ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech
-POSTGRES_PASSWORD=npg_jCnoW3hqtal2
-POSTGRES_DATABASE=neondb
-POSTGRES_URL_NO_SSL=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech/neondb
-POSTGRES_PRISMA_URL=postgresql://neondb_owner:npg_jCnoW3hqtal2@ep-cool-queen-agrokii4-pooler.c-2.eu-central-1.aws.neon.tech/neondb?connect_timeout=15&sslmode=require
-
-# Neon Auth environment variables for Next.js
-NEXT_PUBLIC_STACK_PROJECT_ID=****************************
-NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY=****************************************
-STACK_SECRET_SERVER_KEY=***********************
+return (
+  <div>
+    {messages.map(m => (
+      m.toolInvocations?.map(tool => {
+        if (tool.toolName === 'showStockChart') {
+           return <StockChart data={tool.args} />;
+        }
+      })
+    ))}
+  </div>
+)
+2. MÓZG: Pamięć Hybrydowa i GraphRAGCel: Przezwyciężenie "amnezji relacyjnej" agenta.Samo wyszukiwanie wektorowe to za mało. Lolek musi rozumieć kontekst i relacje między faktami.Architektura Bazy (Postgres + Prisma):Pamięć Epizodyczna: Logi rozmów, zdarzenia (kto, co, kiedy).Pamięć Semantyczna: pgvector do przechowywania embeddingów wiedzy.Graf Wiedzy: Relacyjne modelowanie danych (User -> Created -> Project).Hybrid Search: Algorytm wyszukiwania łączy:Keyword Search: Precyzyjne dopasowanie nazw.Vector Search: Podobieństwo kontekstowe.Graph Traversal: Nawigacja po relacjach (np. "znajdź projekty autora X").3. RĘCE: Bezpieczny Sandbox (Code Execution)Cel: Bezpieczne pisanie i uruchamianie kodu przez agenta.ZASADA KRYTYCZNA: Nigdy nie uruchamiamy kodu wygenerowanego przez AI bezpośrednio w środowisku Node.js aplikacji.Rozwiązanie: Integracja z E2B (Code Interpreter SDK).Działanie: Narzędzie executePython wysyła kod do izolowanej chmury E2B, która zwraca wynik lub wygenerowany plik/obraz.4. WYDAJNOŚĆ: Asynchroniczność i OrkiestracjaCel: Obejście limitów czasowych Vercel (Serverless timeout).Dla zadań wymagających długiego namysłu lub scrapowania danych:Orkiestracja: Wykorzystanie Inngest lub Trigger.dev.Flow:API odpowiada natychmiast ("Przyjąłem, przetwarzam...").Zadanie trafia do kolejki backgroundowej.Worker przetwarza logikę bez limitu 10-60s.Wynik jest wypychany do UI przez WebSocket (np. Ably).✅ Roadmapa Wdrożeniowa (Sprint Checklist)Plan transformacji projektu Lolek na poziom PRO:Faza 1: Baza Danych i Pamięć 🧠[ ] Schema: Zaktualizuj prisma.schema dodając obsługę pgvector (rozszerzenie vector w Postgres).[ ] Modele: Stwórz modele EpisodicMemory (logi) oraz SemanticFact (wiedza + embedding).[ ] Logika RAG: Zaimplementuj funkcję retrieveContext(query) realizującą Hybrid Search (baza + wektory).Faza 2: Interfejs (Frontend) 🎨[ ] Refactoring Chatu: Przepisz LolekChat.tsx na useChat (Client-Side Tool Invocation). Usuń streamUI zwracające HTML.[ ] Komponenty: Stwórz bibliotekę "cegiełek" UI (karty, tabele, wykresy), które agent może wywoływać.Faza 3: Logika i Narzędzia 🛠️[ ] Definicja Narzędzi: Zdefiniuj tools w route.ts używając zodSchema.[ ] Sandbox: Podłącz E2B SDK do narzędzia code_interpreter.[ ] Kolejkowanie: Zainstaluj SDK Inngest dla zadań trwających >10s (np. analiza dużej ilości danych).Faza 4: Bezpieczeństwo 🔐[ ] System Prompt: Zabezpiecz prompt przed atakami (instrukcje obronne).[ ] Auth: Wymuś autoryzację (Auth.js) na endpointach API czatu.Podsumowanie Architektury DocelowejElementStara Metoda (Unikać) ❌Nowa Metoda (Zalecana) ✅UIServer-side streamUI (RSC)Client-side useChat + Tool InvocationPamięćTylko wektory (Pinecone)GraphRAG (Postgres + Relacje + Wektory)Kod AIeval() w Node.jsE2B Sandbox / FirecrackerDługie zadaniaZwykły endpoint APIInngest / Trigger.dev (Kolejki)
