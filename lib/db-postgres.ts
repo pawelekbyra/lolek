@@ -23,14 +23,15 @@ async function executeWithRetry(queryFn: () => Promise<any>) {
     } catch (error: any) {
       lastError = error;
       if (error.message === 'Query timed out' || error.name === 'NeonDbError') {
-        console.warn(`Query failed (attempt ${i + 1}/${MAX_RETRIES}): ${error.message}. Retrying...`);
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, i)));
       } else {
         throw error;
       }
     }
   }
-  throw new Error(`Query failed after ${MAX_RETRIES} retries: ${lastError?.message}`);
+  const finalError = new Error(`Query failed after ${MAX_RETRIES} retries: ${lastError?.message}`);
+  console.error("DB QUERY FAILED:", lastError);
+  throw finalError;
 }
 
 function getDb() {
@@ -61,9 +62,9 @@ function getDb() {
 export async function getChatMessages(sessionId: string): Promise<any[]> {
     const sql = getDb();
     const result = await sql`
-        SELECT role, content FROM chat_messages
-        WHERE session_id = ${sessionId}
-        ORDER BY created_at ASC;
+        SELECT role, content FROM "Message"
+        WHERE "conversationId" = ${sessionId}
+        ORDER BY timestamp ASC;
     `;
     return result.map(msg => ({
         role: msg.role,
@@ -74,7 +75,7 @@ export async function getChatMessages(sessionId: string): Promise<any[]> {
 export async function addChatMessage(sessionId: string, role: string, content: string): Promise<void> {
     const sql = getDb();
     await sql`
-        INSERT INTO chat_messages (session_id, role, content)
+        INSERT INTO "Message" ("conversationId", role, content)
         VALUES (${sessionId}, ${role}, ${content});
     `;
 }
