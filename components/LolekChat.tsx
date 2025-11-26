@@ -8,9 +8,10 @@ import PlaceholderToolCard from './PlaceholderToolCard';
 
 const LolekChat = () => {
   const [input, setInput] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
-  const { messages, sendMessage, setMessages } = useChat({
+  const { messages, sendMessage, setMessages, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
       body: { session_id: sessionId },
@@ -29,29 +30,36 @@ const LolekChat = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setFile(file);
+    }
+  };
+
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!input.trim() && !file) return;
+
+    if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result as string;
+        const base64Data = base64String.split(',')[1];
         sendMessage({
           parts: [
             { type: 'text', text: input },
-            { type: 'image', image: base64String },
+            { type: 'file', mimeType: file.type, data: base64Data },
           ],
         });
       };
       reader.readAsDataURL(file);
+    } else {
+      sendMessage({
+        parts: [{ type: 'text', text: input }],
+      });
     }
-  };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-    setIsLoading(true);
-    await sendMessage({
-      parts: [{ type: 'text', text: input }],
-    });
-    setIsLoading(false);
     setInput('');
+    setFile(null);
   };
 
   return (
@@ -73,13 +81,7 @@ const LolekChat = () => {
         ))}
       </div>
       <form
-        onSubmit={e => {
-          e.preventDefault();
-          sendMessage({
-            parts: [{ type: 'text', text: input }],
-          });
-          setInput('');
-        }}
+        onSubmit={handleSubmit}
         className="p-4 border-t bg-white flex items-center"
       >
         <input
@@ -88,19 +90,21 @@ const LolekChat = () => {
           onChange={e => setInput(e.target.value)}
           className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
           placeholder="Type a message or upload an image..."
+          disabled={status !== 'ready'}
         />
         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="ml-2 px-4 py-2 bg-gray-200 text-black rounded-lg hover:bg-gray-300 disabled:opacity-50"
+          disabled={status !== 'ready'}
         >
           Upload
         </button>
         <button
           type="submit"
           className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-          disabled={!input.trim()}
+          disabled={(!input.trim() && !file) || status !== 'ready'}
         >
           Send
         </button>
