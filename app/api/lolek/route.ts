@@ -152,6 +152,93 @@ export async function POST(req: Request) {
             }
           },
         }),
+        vercel_api_request: tool({
+          description: 'Pozwala na wykonanie dowolnego surowego zapytania do API Vercel.',
+          inputSchema: z.object({
+            endpoint: z.string().describe('Ścieżka API Vercel, np. /v9/projects'),
+            method: z.string().optional().default('GET').describe('Metoda HTTP (GET, POST, PUT, DELETE, etc.).'),
+            body: z.string().optional().describe('Ciało zapytania w formacie JSON (dla metod POST, PUT, etc.).'),
+          }),
+          execute: async ({ endpoint, method, body }) => {
+            const token = process.env.VERCEL_API_TOKEN;
+            if (!token) {
+              return { error: 'Brak VERCEL_API_TOKEN w zmiennych środowiskowych.' };
+            }
+
+            try {
+              const url = `https://api.vercel.com${endpoint}`;
+              const options: RequestInit = {
+                method: method?.toUpperCase() || 'GET',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+              };
+
+              if (body && (method?.toUpperCase() !== 'GET' && method?.toUpperCase() !== 'HEAD')) {
+                options.body = body;
+              }
+
+              const response = await fetch(url, options);
+              const responseData = await response.json().catch(() => response.text());
+
+              if (!response.ok) {
+                return {
+                  error: `Błąd API Vercel: ${response.status}`,
+                  details: responseData,
+                };
+              }
+
+              return { status: response.status, response: responseData };
+            } catch (error: any) {
+              return { error: `Nie udało się wykonać zapytania do Vercel API: ${error.message}` };
+            }
+          },
+        }),
+        github_api_request: tool({
+          description: 'Pozwala na wykonanie dowolnego surowego zapytania do API GitHub.',
+          inputSchema: z.object({
+            path: z.string().describe('Ścieżka API, np. /repos/owner/repo/issues'),
+            method: z.string().optional().default('GET').describe('Metoda HTTP (GET, POST, PUT, DELETE, etc.).'),
+            body: z.string().optional().describe('Ciało zapytania w formacie JSON (dla metod POST, PUT, etc.).'),
+          }),
+          execute: async ({ path, method, body }) => {
+            const token = process.env.GITHUB_TOKEN;
+            if (!token) {
+              return { error: 'Brak GITHUB_TOKEN w zmiennych środowiskowych.' };
+            }
+
+            try {
+              const url = `https://api.github.com${path}`;
+              const options: RequestInit = {
+                method: method?.toUpperCase() || 'GET',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  Accept: 'application/vnd.github.v3+json',
+                  'Content-Type': 'application/json',
+                },
+              };
+
+              if (body && (method?.toUpperCase() !== 'GET' && method?.toUpperCase() !== 'HEAD')) {
+                options.body = body;
+              }
+
+              const response = await fetch(url, options);
+              const responseData = await response.json().catch(() => response.text());
+
+              if (!response.ok) {
+                return {
+                  error: `Błąd API GitHub: ${response.status}`,
+                  details: responseData,
+                };
+              }
+
+              return { status: response.status, response: responseData };
+            } catch (error: any) {
+              return { error: `Nie udało się wykonać zapytania do GitHub API: ${error.message}` };
+            }
+          },
+        }),
         web_search: tool({
           description: 'Pozwala znaleźć aktualne informacje w sieci.',
           inputSchema: z.object({
