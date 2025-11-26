@@ -43,6 +43,17 @@ const LolekChat = () => {
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    setIsLoading(true);
+    await sendMessage({
+      parts: [{ type: 'text', text: input }],
+    });
+    setIsLoading(false);
+    setInput('');
+  };
+
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-gray-50">
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
