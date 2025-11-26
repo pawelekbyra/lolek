@@ -61,28 +61,28 @@ export async function retrieveContext(query: string, userId: string): Promise<st
 
   if (Array.isArray(semanticFacts) && semanticFacts.length > 0) {
     context += '[WYSZUKIWANIE WEKTOROWE]\n';
-    semanticFacts.forEach((fact: any) => {
+    semanticFacts.forEach((fact: { content: string }) => {
       context += `- ${fact.content}\n`;
     });
   }
 
   if (keywordFacts.length > 0) {
     context += '[WYSZUKIWANIE SŁÓW KLUCZOWYCH W FAKTACH]\n';
-    keywordFacts.forEach(fact => {
+    keywordFacts.forEach((fact: { content: string }) => {
       context += `- ${fact.content}\n`;
     });
   }
 
   if (keywordMessages.length > 0) {
     context += '[WYSZUKIWANIE SŁÓW KLUCZOWYCH W WIADOMOŚCIACH]\n';
-    keywordMessages.forEach(message => {
+    keywordMessages.forEach((message: { content: string }) => {
       context += `- ${message.content}\n`;
     });
   }
 
   if (graphEntities.length > 0) {
     context += '[KONTEKST Z GRAFU]\n';
-    graphEntities.forEach(entity => {
+    graphEntities.forEach((entity: { name: string; relations: { type: string; relatedEntity: { name: string } }[] }) => {
       entity.relations.forEach(relation => {
         context += `- ${entity.name} ${relation.type} ${relation.relatedEntity.name}\n`;
       });

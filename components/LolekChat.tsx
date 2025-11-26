@@ -43,11 +43,10 @@ const LolekChat = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result as string;
-        const base64Data = base64String.split(',')[1];
         sendMessage({
           parts: [
             { type: 'text', text: input },
-            { type: 'file', mimeType: file.type, data: base64Data },
+            { type: 'file', mediaType: file.type, url: base64String },
           ],
         });
       };
