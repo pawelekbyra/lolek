@@ -1,10 +1,12 @@
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 model User {
@@ -94,6 +96,20 @@ model ProceduralMemory {
   description String?
 
   @@unique([toolId])
+}
+
+model MediaContact {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  outlet    String? // e.g., "Gazeta Wrocławska"
+  role      String? // e.g., "Editor", "Journalist"
+  notes     String? // e.g., "Topics: Sports, Ecology"
+  tags      String[] // e.g., ["wroclaw", "radio"]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([outlet])
 }
 
 model Document {
