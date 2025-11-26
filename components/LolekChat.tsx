@@ -8,6 +8,7 @@ import PlaceholderToolCard from './PlaceholderToolCard';
 
 const LolekChat = () => {
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
   const { messages, sendMessage, setMessages } = useChat({
@@ -26,20 +27,39 @@ const LolekChat = () => {
     fetchHistory();
   }, [sessionId, setMessages]);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setIsLoading(true);
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result as string;
-        sendMessage({
-          parts: [
-            { type: 'text', text: input },
-            { type: 'image', image: base64String },
-          ],
-        });
+        setMessages([
+          ...messages,
+          {
+            id: 'tmp-id',
+            role: 'user',
+            parts: [
+              { type: 'text', text: input },
+              {
+                type: 'data',
+                content: {
+                  type: 'image',
+                  data: base64String,
+                },
+              },
+            ],
+          },
+        ]);
       };
       reader.readAsDataURL(file);
+
+      await sendMessage({
+        parts: [{ type: 'text', text: input }],
+        attachments: [file],
+      });
+      setIsLoading(false);
+      setInput('');
     }
   };
 
@@ -67,19 +87,17 @@ const LolekChat = () => {
                 if (part.type === 'tool-invocation') {
                   return <PlaceholderToolCard key={i} toolCall={part} />;
                 }
+                // Render image attachments
+                if (part.type === 'data' && part.content.type === 'image') {
+                  return <img key={i} src={part.content.data} alt="uploaded image" className="max-w-xs rounded-lg" />;
+                }
               })}
             </div>
           </div>
         ))}
       </div>
       <form
-        onSubmit={e => {
-          e.preventDefault();
-          sendMessage({
-            parts: [{ type: 'text', text: input }],
-          });
-          setInput('');
-        }}
+        onSubmit={handleSubmit}
         className="p-4 border-t bg-white flex items-center"
       >
         <input
@@ -94,13 +112,14 @@ const LolekChat = () => {
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="ml-2 px-4 py-2 bg-gray-200 text-black rounded-lg hover:bg-gray-300 disabled:opacity-50"
+          disabled={isLoading}
         >
           Upload
         </button>
         <button
           type="submit"
           className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-          disabled={!input.trim()}
+          disabled={!input.trim() || isLoading}
         >
           Send
         </button>
