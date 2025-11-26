@@ -90,9 +90,8 @@ export async function POST(req: Request) {
         const similarMemories: { content: string; similarity: number }[] = await prisma.$queryRaw`
           SELECT content, 1 - (embedding <=> ${queryEmbeddingString}::vector) as similarity
           FROM "SemanticMemory"
-          WHERE "userId" = ${userId}
-          ORDER BY similarity DESC
-          LIMIT 3;
+          WHERE "userId" = ${userId} AND 1 - (embedding <=> ${queryEmbeddingString}::vector) > 0.7
+          ORDER BY similarity DESC;
         `;
 
         if (similarMemories.length > 0) {
@@ -373,6 +372,50 @@ export async function POST(req: Request) {
                     return { error: `Błąd podczas łączenia z Vercel: ${error.message}` };
                 }
             }
+        }),
+        vercel_add_env: tool({
+          description: 'Adds a new environment variable to the Vercel project.',
+          inputSchema: z.object({
+            key: z.string().describe('The name of the environment variable (e.g., "TAVILY_API_KEY").'),
+            value: z.string().describe('The value of the environment variable.'),
+            targets: z.array(z.string()).optional().default(['production', 'preview', 'development']).describe('The environments the variable should apply to.'),
+            projectId: z.string().optional().default(myProjectId).describe('The Vercel project ID.'),
+          }),
+          execute: async ({ key, value, targets, projectId }) => {
+            const token = process.env.VERCEL_API_TOKEN;
+            if (!token || !projectId) {
+              return { error: 'Vercel configuration (Token/ProjectID) is missing.' };
+            }
+
+            try {
+              const response = await fetch(`https://api.vercel.com/v9/projects/${projectId}/env`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  key,
+                  value,
+                  type: 'encrypted',
+                  target: targets,
+                }),
+              });
+
+              if (!response.ok) {
+                const errorBody = await response.json();
+                if (errorBody.error?.code === 'env_var_key_already_exists') {
+                   return { error: `Environment variable '${key}' already exists.` };
+                }
+                return { error: `Vercel API Error: ${response.status} ${JSON.stringify(errorBody)}` };
+              }
+
+              const data = await response.json();
+              return { status: 'success', message: `Environment variable '${key}' added successfully.`, details: data };
+            } catch (error: any) {
+              return { error: `Failed to add environment variable: ${error.message}` };
+            }
+          },
         }),
         delegateTaskToJules: tool({
           description: 'Zleć zadanie programistyczne agentowi Jules (np. naprawę błędu na podstawie logów).',
