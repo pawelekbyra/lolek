@@ -3,12 +3,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { v4 as uuidv4 } from 'uuid';
+import { DefaultChatTransport } from 'ai';
 
 const LolekChat = () => {
   const [sessionId] = useState(uuidv4());
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, append } = useChat({
-    api: '/api/lolek',
-    body: { session_id: sessionId },
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { messages, sendMessage, setMessages } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/lolek',
+      body: { session_id: sessionId },
+    }),
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,19 +30,24 @@ const LolekChat = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        append({
-          role: 'user',
-          content: [
-            { type: 'text', text: input },
-            { type: 'image', image: base64String },
-          ],
-        });
-      };
-      reader.readAsDataURL(file);
+      sendMessage({
+        parts: [
+          { type: 'text', text: input },
+          { type: 'file', file },
+        ],
+      });
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    setIsLoading(true);
+    await sendMessage({
+      parts: [{ type: 'text', text: input }],
+    });
+    setIsLoading(false);
+    setInput('');
   };
 
   return (
@@ -46,15 +56,11 @@ const LolekChat = () => {
         {messages.map((msg, index) => (
           <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`px-4 py-2 rounded-lg shadow-md ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-black'}`}>
-              {typeof msg.content === 'string'
-                ? msg.content
-                : (msg.content as any[]).map((part, i) =>
-                    part.type === 'text' ? (
-                      <p key={i}>{part.text}</p>
-                    ) : (
-                      <img key={i} src={part.image} alt="user upload" className="max-w-xs rounded-lg" />
-                    )
-                  )}
+              {msg.parts.map((part, i) => {
+                if (part.type === 'text') {
+                  return <p key={i}>{part.text}</p>;
+                }
+              })}
             </div>
           </div>
         ))}
@@ -70,7 +76,7 @@ const LolekChat = () => {
         <input
           type="text"
           value={input}
-          onChange={handleInputChange}
+          onChange={e => setInput(e.target.value)}
           className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
           placeholder="Type a message or upload an image..."
           disabled={isLoading}
