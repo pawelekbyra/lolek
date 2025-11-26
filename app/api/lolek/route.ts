@@ -4,6 +4,7 @@ import {
   convertToCoreMessages,
   tool,
   stepCountIs,
+  generateObject,
 } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
@@ -19,6 +20,13 @@ export async function POST(req: Request) {
       throw new Error('GOOGLE_GENERATIVE_AI_API_KEY environment variable is not set');
     }
 
+    const myRepoOwner = process.env.NEXT_PUBLIC_MY_REPO_OWNER || 'pawelekbyra';
+    const myRepoName = process.env.NEXT_PUBLIC_MY_REPO_NAME || 'lolek';
+    const myProjectId = process.env.VERCEL_PROJECT_ID || 'prj_GPzLdsmmg9Fj3R5RkYpPmyoEwvDW';
+
+    const cheapModel = google('gemini-2.5-flash-lite');
+    const smartModel = google('gemini-3-pro-preview');
+
     const personaPath = path.join(process.cwd(), 'lolek-persona.md');
     let system = "Jesteś pomocnym asystentem o imieniu Lolek."; // Fallback
     try {
@@ -31,13 +39,59 @@ export async function POST(req: Request) {
       console.error("Error reading persona:", err);
     }
 
+    // --- Soul: Inject Operational Awareness ---
+    const operationalAwareness = `
+
+### OPERATIONAL SELF-AWARENESS (CRITICAL):
+- YOU ARE the application running from the file "app/api/lolek/route.ts".
+- DO NOT confuse yourself with other endpoints like "chat/route.ts".
+- Your source code resides in GitHub: "${myRepoOwner}/${myRepoName}".
+- You are deployed on Vercel Project ID: "${myProjectId}".
+- The tools defined in this file (e.g., delegateTaskToJules, vercel_get_logs) ARE YOUR TOOLS. You have access to them directly.
+`;
+    system += operationalAwareness;
+    // --- End Soul ---
+
     const { messages, session_id: sessionId }: { messages: UIMessage[], session_id: string } = await req.json();
 
     // Fetch chat history from the database
     const initialMessages = await getChatMessages(sessionId);
 
+    // --- Brain: Model Router ---
+    let selectedModel = smartModel;
+    const lastUserMessage = messages[messages.length - 1]?.content;
+
+    if (typeof lastUserMessage === 'string' && lastUserMessage.trim()) {
+      try {
+        const { object: { isComplex, reason } } = await generateObject({
+          model: cheapModel,
+          schema: z.object({
+            isComplex: z.boolean().describe('Is the request complex (e.g., involves coding, debugging, long analysis, or using tools)?'),
+            reason: z.string().describe('A brief explanation for the complexity decision.'),
+          }),
+          prompt: `Analyze the following user request and determine if it requires the advanced 'gemini-3-pro-preview' model. The request is: "${lastUserMessage}"`,
+        });
+
+        if (isComplex) {
+          selectedModel = smartModel;
+          console.log(`[Router] Selected: smartModel. Reason: ${reason}`);
+        } else {
+          selectedModel = cheapModel;
+          console.log(`[Router] Selected: cheapModel. Reason: ${reason}`);
+        }
+      } catch (error) {
+        console.error('[Router] Error during model routing, defaulting to smartModel:', error);
+        selectedModel = smartModel; // Failsafe
+      }
+    } else {
+        // Default to smart model if there's no text content to analyze
+        selectedModel = smartModel;
+        console.log('[Router] No text in last message, defaulting to smartModel.');
+    }
+    // --- End Brain ---
+
     const result = streamText({
-      model: google('gemini-3-pro-preview'),
+      model: selectedModel,
       system,
       messages: [...convertToCoreMessages(initialMessages), ...convertToCoreMessages(messages)],
       onFinish: async ({ text }) => {
@@ -88,8 +142,8 @@ export async function POST(req: Request) {
           description: 'Pobiera treść pliku z repozytorium GitHub.',
           inputSchema: z.object({
             path: z.string().describe('Ścieżka do pliku w repozytorium.'),
-            owner: z.string().optional().default('pawelekbyra'),
-            repo: z.string().optional().default('fak'),
+            owner: z.string().optional().default(myRepoOwner),
+            repo: z.string().optional().default(myRepoName),
           }),
           execute: async ({ path, owner, repo }) => {
             const token = process.env.GITHUB_TOKEN;
@@ -115,8 +169,8 @@ export async function POST(req: Request) {
           inputSchema: z.object({
             title: z.string().describe('Tytuł nowego Issue.'),
             body: z.string().describe('Treść Issue, np. opis błędu lub plan działania.'),
-            owner: z.string().optional().default('pawelekbyra'),
-            repo: z.string().optional().default('fak'),
+            owner: z.string().optional().default(myRepoOwner),
+            repo: z.string().optional().default(myRepoName),
           }),
           execute: async ({ title, body, owner, repo }) => {
             const token = process.env.GITHUB_TOKEN;
@@ -145,8 +199,8 @@ export async function POST(req: Request) {
             path: z.string().describe('Ścieżka do pliku.'),
             content: z.string().describe('Nowa zawartość pliku.'),
             commitMessage: z.string().describe('Komunikat commitu.'),
-            owner: z.string().optional().default('pawelekbyra'),
-            repo: z.string().optional().default('fak'),
+            owner: z.string().optional().default(myRepoOwner),
+            repo: z.string().optional().default(myRepoName),
           }),
           execute: async ({ path, content, commitMessage, owner, repo }) => {
             const token = process.env.GITHUB_TOKEN;
@@ -191,7 +245,7 @@ export async function POST(req: Request) {
         vercel_redeploy: tool({
           description: 'Wymusza nowe wdrożenie (redeploy) najnowszej wersji produkcyjnej projektu na Vercel.',
           inputSchema: z.object({
-             projectId: z.string().optional().describe('ID projektu Vercel. Domyślnie z process.env.VERCEL_PROJECT_ID'),
+             projectId: z.string().optional().default(myProjectId).describe('ID projektu Vercel.'),
           }),
           execute: async ({ projectId }) => {
             const token = process.env.VERCEL_API_TOKEN;
@@ -235,14 +289,14 @@ export async function POST(req: Request) {
         vercel_get_logs: tool({
             description: 'Pobierz ostatnie logi (opcjonalnie błędy) z Vercel dla konkretnego lub ostatniego wdrożenia.',
             inputSchema: z.object({
+                projectId: z.string().optional().default(myProjectId).describe('ID projektu Vercel.'),
                 deploymentId: z.string().optional().describe('ID wdrożenia. Jeśli brak, pobiera z ostatniego.'),
                 limit: z.number().optional().default(50),
                 onlyErrors: z.boolean().optional().default(true).describe('Czy filtrować tylko logi typu "error".')
             }),
-            execute: async ({ deploymentId, limit, onlyErrors }) => {
+            execute: async ({ projectId, deploymentId, limit, onlyErrors }) => {
                 const token = process.env.VERCEL_API_TOKEN;
-                const projectId = process.env.VERCEL_PROJECT_ID;
-                if (!token || !projectId) return { error: 'Brak konfiguracji Vercel.' };
+                if (!token || !projectId) return { error: 'Brak konfiguracji Vercel (Token/ProjectID).' };
 
                 let targetDeploymentId = deploymentId;
 
