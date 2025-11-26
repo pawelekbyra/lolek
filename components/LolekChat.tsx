@@ -1,8 +1,9 @@
 'use client';
 
+import { Artifact } from '@/app/page';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, UIMessage } from 'ai';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import PlaceholderToolCard from './PlaceholderToolCard';
 import ReactMarkdown from 'react-markdown';
@@ -27,17 +28,21 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
     }),
     onToolCall: ({ toolCall }) => {
       if (toolCall.toolName === 'generate_canvas_content') {
-        onArtifactGenerated(toolCall.args);
-        return {
-          // You can optionally return a UI component to render in place of the tool call
-        };
+        onArtifactGenerated(toolCall.input as Omit<Artifact, 'id' | 'isVisible'>);
+        // Return nothing to prevent the tool call from being rendered in the chat
+        return;
       }
     },
-    initialMessages: (async () => {
-      const response = await fetch(`/api/lolek/history?session_id=${sessionId}`);
-      return await response.json();
-    })()
   });
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      const response = await fetch(`/api/lolek/history?session_id=${sessionId}`);
+      const historyMessages = await response.json();
+      setMessages(historyMessages);
+    };
+    fetchHistory();
+  }, [sessionId, setMessages]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -117,7 +122,7 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
                   );
                 }
                 if (part.type === 'tool-invocation') {
-                  if (part.toolName === 'generate_canvas_content') {
+                  if ('toolName' in part && part.toolName === 'generate_canvas_content') {
                     // Don't render a placeholder for the canvas tool
                     return null;
                   }

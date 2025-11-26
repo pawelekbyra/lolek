@@ -8,11 +8,13 @@ import {
 } from 'ai';
 import { google } from '@ai-sdk/google';
 import { z } from 'zod';
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 import { getChatMessages, addChatMessage } from '../../../lib/db-postgres';
 import { getEmbedding } from '../../../lib/embedding';
 import { PrismaClient } from '@prisma/client';
+import { spawn } from 'child_process';
+import vm from 'vm';
 
 const prisma = new PrismaClient();
 export const dynamic = 'force-dynamic';
@@ -33,13 +35,10 @@ export async function POST(req: Request) {
     const personaPath = path.join(process.cwd(), 'lolek-persona.md');
     let system = "Jesteś pomocnym asystentem o imieniu Lolek."; // Fallback
     try {
-      if (fs.existsSync(personaPath)) {
-        system = fs.readFileSync(personaPath, 'utf-8');
-      } else {
-        console.warn('Persona file not found at:', personaPath);
-      }
+      await fs.access(personaPath);
+      system = await fs.readFile(personaPath, 'utf-8');
     } catch (err) {
-      console.error("Error reading persona:", err);
+      console.warn('Persona file not found at:', personaPath);
     }
 
     const { messages, session_id: sessionId }: { messages: UIMessage[], session_id: string } = await req.json();
@@ -664,6 +663,110 @@ export async function POST(req: Request) {
               };
             } catch (error: any) {
               return { error: `Nie udało się zlecić zadania: ${error.message}` };
+            }
+          },
+        }),
+        database_execute_raw: tool({
+          description: 'Executes a raw SQL query against the database. WARNING: This tool can cause irreversible data loss and should be used with extreme caution.',
+          inputSchema: z.object({
+            query: z.string().describe('The raw SQL query to execute.'),
+            parameters: z.array(z.any()).optional().describe('An array of parameters to pass to the query.'),
+          }),
+          execute: async ({ query, parameters }) => {
+            try {
+              const result = await (prisma as any).$queryRawUnsafe(query, ...(parameters || []));
+              return { status: 'success', result };
+            } catch (error: any) {
+              return { error: `Failed to execute query: ${error.message}` };
+            }
+          },
+        }),
+        run_utility_script: tool({
+          description: 'Runs a utility script in a sandboxed environment. WARNING: This tool can execute arbitrary code and is a major security risk.',
+          inputSchema: z.object({
+            code: z.string().describe('The code to execute.'),
+            language: z.enum(['javascript', 'python']).describe('The language of the code.'),
+          }),
+          execute: async ({ code, language }) => {
+            if (language === 'javascript') {
+              try {
+                const sandbox = {};
+                vm.createContext(sandbox);
+                const result = vm.runInContext(code, sandbox);
+                return { status: 'success', result };
+              } catch (error: any) {
+                return { error: `Failed to execute javascript: ${error.message}` };
+              }
+            } else if (language === 'python') {
+              return new Promise((resolve) => {
+                const python = spawn('python', ['-c', code]);
+                let stdout = '';
+                let stderr = '';
+                python.stdout.on('data', (data) => {
+                  stdout += data.toString();
+                });
+                python.stderr.on('data', (data) => {
+                  stderr += data.toString();
+                });
+                python.on('close', (code) => {
+                  if (code === 0) {
+                    resolve({ status: 'success', stdout });
+                  } else {
+                    resolve({ error: `Failed to execute python: ${stderr}`, stderr });
+                  }
+                });
+              });
+            }
+          },
+        }),
+        schema_manager: tool({
+          description: 'Manages the database schema. WARNING: The migrate action can cause irreversible data loss and should be used with extreme caution.',
+          inputSchema: z.object({
+            action: z.enum(['read', 'update', 'migrate']).describe('The action to perform.'),
+            content: z.string().optional().describe('The new content of the schema.prisma file.'),
+            migration_name: z.string().optional().describe('The name of the migration.'),
+          }),
+          execute: async ({ action, content, migration_name }) => {
+            const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
+            if (action === 'read') {
+              try {
+                const schema = await fs.readFile(schemaPath, 'utf-8');
+                return { status: 'success', schema };
+              } catch (error: any) {
+                return { error: `Failed to read schema: ${error.message}` };
+              }
+            } else if (action === 'update') {
+              if (!content) {
+                return { error: 'Content is required for the update action.' };
+              }
+              try {
+                await fs.writeFile(schemaPath, content);
+                return { status: 'success', message: 'Schema updated successfully.' };
+              } catch (error: any) {
+                return { error: `Failed to update schema: ${error.message}` };
+              }
+            } else if (action === 'migrate') {
+              if (!migration_name) {
+                return { error: 'Migration name is required for the migrate action.' };
+              }
+              return new Promise((resolve) => {
+                const prismaMigrate = spawn('npx', ['prisma', 'migrate', 'dev', '--name', migration_name]);
+                let stdout = '';
+                let stderr = '';
+                prismaMigrate.stdout.on('data', (data) => {
+                  stdout += data.toString();
+                });
+                prismaMigrate.stderr.on('data', (data) => {
+                  stderr += data.toString();
+                });
+                prismaMigrate.on('close', (code) => {
+                  if (code === 0) {
+                    resolve({ status: 'success', stdout });
+                  } else {
+                    resolve({ error: `Failed to migrate: ${stderr}`, stderr });
+                  }
+                });
+              });
             }
           },
         }),
