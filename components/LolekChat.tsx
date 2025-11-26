@@ -47,7 +47,7 @@ const LolekChat = () => {
         sendMessage({
           parts: [
             { type: 'text', text: input },
-            { type: 'file', mimeType: file.type, data: base64Data },
+            { type: 'file', mediaType: file.type, data: base64Data },
           ],
         });
       };
