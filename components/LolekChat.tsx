@@ -39,8 +39,6 @@ const LolekChat = () => {
     e.preventDefault();
     if (!input.trim() && !file) return;
 
-    const messageParts = [{ type: 'text', text: input }];
-
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -48,14 +46,16 @@ const LolekChat = () => {
         const base64Data = base64String.split(',')[1];
         sendMessage({
           parts: [
-            ...messageParts,
+            { type: 'text', text: input },
             { type: 'file', mimeType: file.type, data: base64Data },
           ],
         });
       };
       reader.readAsDataURL(file);
     } else {
-      sendMessage({ parts: messageParts });
+      sendMessage({
+        parts: [{ type: 'text', text: input }],
+      });
     }
 
     setInput('');
