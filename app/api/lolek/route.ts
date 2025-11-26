@@ -618,6 +618,14 @@ export async function POST(req: Request) {
             }
           },
         }),
+        generate_canvas_content: tool({
+          description: 'Write a long report, article, or code to the side canvas.',
+          inputSchema: z.object({
+            title: z.string(),
+            type: z.enum(['markdown', 'code']),
+            content: z.string().describe('The full markdown content or code')
+          })
+        }),
         delegateTaskToJules: tool({
           description: 'Zleć zadanie programistyczne agentowi Jules (np. naprawę błędu na podstawie logów).',
           inputSchema: z.object({

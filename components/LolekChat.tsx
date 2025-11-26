@@ -1,8 +1,8 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import { useState, useRef, useEffect } from 'react';
+import { DefaultChatTransport, UIMessage } from 'ai';
+import { useState, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import PlaceholderToolCard from './PlaceholderToolCard';
 import ReactMarkdown from 'react-markdown';
@@ -10,26 +10,34 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-const LolekChat = () => {
+type LolekChatProps = {
+  onArtifactGenerated: (artifact: Omit<Artifact, 'id' | 'isVisible'>) => void;
+};
+
+const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   const [input, setInput] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
-  const { messages, sendMessage, setMessages, status } = useChat({
+
+  const { messages, setMessages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
       body: { session_id: sessionId },
     }),
-  });
-
-  useEffect(() => {
-    const fetchHistory = async () => {
+    onToolCall: ({ toolCall }) => {
+      if (toolCall.toolName === 'generate_canvas_content') {
+        onArtifactGenerated(toolCall.args);
+        return {
+          // You can optionally return a UI component to render in place of the tool call
+        };
+      }
+    },
+    initialMessages: (async () => {
       const response = await fetch(`/api/lolek/history?session_id=${sessionId}`);
-      const history = await response.json();
-      setMessages(history);
-    };
-    fetchHistory();
-  }, [sessionId, setMessages]);
+      return await response.json();
+    })()
+  });
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -109,6 +117,10 @@ const LolekChat = () => {
                   );
                 }
                 if (part.type === 'tool-invocation') {
+                  if (part.toolName === 'generate_canvas_content') {
+                    // Don't render a placeholder for the canvas tool
+                    return null;
+                  }
                   return <PlaceholderToolCard key={i} toolCall={part} />;
                 }
               })}
