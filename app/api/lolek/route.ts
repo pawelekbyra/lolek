@@ -152,6 +152,107 @@ export async function POST(req: Request) {
             }
           },
         }),
+        github_create_pull_request: tool({
+          description: 'Tworzy nowy Pull Request w repozytorium GitHub.',
+          inputSchema: z.object({
+            title: z.string().describe('Tytuł Pull Requesta.'),
+            body: z.string().describe('Opis Pull Requesta.'),
+            head: z.string().describe('Nazwa gałęzi, która ma zostać scalona.'),
+            base: z.string().optional().default('main').describe('Nazwa gałęzi docelowej. Domyślnie "main".'),
+            owner: z.string().optional().default(myRepoOwner),
+            repo: z.string().optional().default(myRepoName),
+          }),
+          execute: async ({ title, body, head, base, owner, repo }) => {
+            const token = process.env.GITHUB_TOKEN;
+            if (!token) return { error: 'Brak GITHUB_TOKEN.' };
+            try {
+              const prUrl = `https://api.github.com/repos/${owner}/${repo}/pulls`;
+              const response = await fetch(prUrl, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  Accept: 'application/vnd.github.v3+json',
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ title, body, head, base }),
+              });
+              if (!response.ok) return { error: `Błąd API GitHub: ${response.status} ${await response.text()}` };
+              const data = await response.json();
+              return { status: 'success', url: data.html_url };
+            } catch (error: any) {
+              return { error: `Nie udało się utworzyć Pull Requesta: ${error.message}` };
+            }
+          },
+        }),
+        github_create_branch: tool({
+          description: 'Tworzy nową gałąź w repozytorium na podstawie innej gałęzi.',
+          inputSchema: z.object({
+            branchName: z.string().describe('Nazwa nowej gałęzi do utworzenia.'),
+            fromBranch: z.string().optional().default('main').describe('Nazwa gałęzi źródłowej. Domyślnie "main".'),
+            owner: z.string().optional().default(myRepoOwner),
+            repo: z.string().optional().default(myRepoName),
+          }),
+          execute: async ({ branchName, fromBranch, owner, repo }) => {
+            const token = process.env.GITHUB_TOKEN;
+            if (!token) return { error: 'Brak GITHUB_TOKEN.' };
+            try {
+              // 1. Get the SHA of the fromBranch
+              const refUrl = `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${fromBranch}`;
+              const refResponse = await fetch(refUrl, {
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' },
+              });
+              if (!refResponse.ok) return { error: `Nie można pobrać SHA gałęzi '${fromBranch}': ${await refResponse.text()}` };
+              const refData = await refResponse.json();
+              const sha = refData.object.sha;
+
+              // 2. Create the new branch (ref)
+              const createRefUrl = `https://api.github.com/repos/${owner}/${repo}/git/refs`;
+              const createRefResponse = await fetch(createRefUrl, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  Accept: 'application/vnd.github.v3+json',
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  ref: `refs/heads/${branchName}`,
+                  sha: sha,
+                }),
+              });
+              if (!createRefResponse.ok) return { error: `Nie udało się utworzyć gałęzi: ${await createRefResponse.text()}` };
+              const newBranchData = await createRefResponse.json();
+              return { status: 'success', branch: newBranchData.ref };
+            } catch (error: any) {
+              return { error: `Błąd podczas tworzenia gałęzi: ${error.message}` };
+            }
+          },
+        }),
+        github_list_files: tool({
+          description: 'Wyświetla listę plików w repozytorium, opcjonalnie w określonej gałęzi.',
+          inputSchema: z.object({
+            branch: z.string().optional().describe("Gałąź do wylistowania. Domyślnie 'main'."),
+            owner: z.string().optional().default(myRepoOwner),
+            repo: z.string().optional().default(myRepoName),
+          }),
+          execute: async ({ branch = 'main', owner, repo }) => {
+            const token = process.env.GITHUB_TOKEN;
+            if (!token) return { error: 'Brak GITHUB_TOKEN.' };
+            try {
+              const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
+              const response = await fetch(treeUrl, {
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' },
+              });
+              if (!response.ok) return { error: `Błąd API GitHub: ${response.status} ${await response.text()}` };
+              const data = await response.json();
+              if (data.truncated) {
+                return { warning: 'Lista plików jest zbyt długa i została obcięta.', files: data.tree.map((file: any) => file.path) };
+              }
+              return { files: data.tree.map((file: any) => file.path) };
+            } catch (error: any) {
+              return { error: `Nie udało się pobrać listy plików: ${error.message}` };
+            }
+          },
+        }),
         web_search: tool({
           description: 'Pozwala znaleźć aktualne informacje w sieci.',
           inputSchema: z.object({
@@ -186,17 +287,19 @@ export async function POST(req: Request) {
           },
         }),
         github_read_file: tool({
-          description: 'Pobiera treść pliku z repozytorium GitHub.',
+          description: 'Pobiera treść pliku z repozytorium GitHub z określonej gałęzi.',
           inputSchema: z.object({
             path: z.string().describe('Ścieżka do pliku w repozytorium.'),
+            branch: z.string().optional().describe('Nazwa gałęzi. Domyślnie główna gałąź.'),
             owner: z.string().optional().default(myRepoOwner),
             repo: z.string().optional().default(myRepoName),
           }),
-          execute: async ({ path, owner, repo }) => {
+          execute: async ({ path, branch, owner, repo }) => {
             const token = process.env.GITHUB_TOKEN;
             if (!token) return { error: 'Brak GITHUB_TOKEN w zmiennych środowiskowych.' };
             try {
-              const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+              const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}${branch ? `?ref=${branch}` : ''}`;
+              const response = await fetch(url, {
                 headers: {
                   Authorization: `Bearer ${token}`,
                   Accept: 'application/vnd.github.v3+json',
@@ -240,23 +343,25 @@ export async function POST(req: Request) {
             }
           },
         }),
-        github_push_file: tool({
-          description: 'Zapisuje lub aktualizuje plik w repozytorium GitHub.',
+        github_upsert_file: tool({
+          description: 'Zapisuje lub aktualizuje plik w określonej gałęzi repozytorium GitHub.',
           inputSchema: z.object({
             path: z.string().describe('Ścieżka do pliku.'),
             content: z.string().describe('Nowa zawartość pliku.'),
             commitMessage: z.string().describe('Komunikat commitu.'),
+            branch: z.string().optional().describe('Nazwa gałęzi. Jeśli nie podana, używana jest domyślna gałąź.'),
             owner: z.string().optional().default(myRepoOwner),
             repo: z.string().optional().default(myRepoName),
           }),
-          execute: async ({ path, content, commitMessage, owner, repo }) => {
+          execute: async ({ path, content, commitMessage, branch, owner, repo }) => {
             const token = process.env.GITHUB_TOKEN;
             if (!token) return { error: 'Brak GITHUB_TOKEN.' };
 
             try {
-              // Krok 1: Pobierz SHA istniejącego pliku (jeśli istnieje)
+              // Step 1: Get the SHA of the existing file (if it exists on the branch)
               let sha: string | undefined;
-              const getFileResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+              const getFileUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}${branch ? `?ref=${branch}` : ''}`;
+              const getFileResponse = await fetch(getFileUrl, {
                 headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' },
               });
               if (getFileResponse.ok) {
@@ -266,8 +371,9 @@ export async function POST(req: Request) {
                  return { error: `Nie można pobrać SHA pliku: ${getFileResponse.statusText}` };
               }
 
-              // Krok 2: Wyślij zaktualizowaną treść
-              const pushResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+              // Step 2: Send the updated content
+              const pushFileUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+              const pushResponse = await fetch(pushFileUrl, {
                 method: 'PUT',
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -277,7 +383,8 @@ export async function POST(req: Request) {
                 body: JSON.stringify({
                   message: commitMessage,
                   content: Buffer.from(content).toString('base64'),
-                  sha: sha, // Dodaj SHA, jeśli plik istnieje
+                  sha: sha, // Include SHA if the file exists to update it
+                  branch: branch, // Specify the branch
                 }),
               });
 
