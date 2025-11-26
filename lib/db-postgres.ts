@@ -72,10 +72,25 @@ export async function getChatMessages(sessionId: string): Promise<any[]> {
     }));
 }
 
-export async function addChatMessage(sessionId: string, role: string, content: string): Promise<void> {
+export async function addChatMessage(sessionId: string, userId: string, role: string, content: string): Promise<void> {
     const sql = getDb();
-    await sql`
-        INSERT INTO "Message" ("conversationId", role, content)
-        VALUES (${sessionId}, ${role}, ${content});
-    `;
+    try {
+        // Ensure conversation exists for the session, creating it if necessary
+        await sql`
+            INSERT INTO "Conversation" (id, "userId")
+            VALUES (${sessionId}, ${userId})
+            ON CONFLICT (id) DO NOTHING;
+        `;
+
+        // Now, insert the message
+        await sql`
+            INSERT INTO "Message" ("conversationId", "userId", role, content)
+            VALUES (${sessionId}, ${userId}, ${role}, ${content});
+        `;
+    } catch (error) {
+        console.error("Failed to add chat message:", error);
+        // Depending on the application's needs, you might want to throw the error
+        // or handle it gracefully. For now, we'll re-throw.
+        throw error;
+    }
 }
