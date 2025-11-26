@@ -14,7 +14,6 @@
     "@google/generative-ai": "^0.24.1",
     "@neondatabase/serverless": "^1.0.2",
     "@prisma/client": "^5.15.0",
-    "@types/uuid": "^10.0.0",
     "ai": "^5.0.102",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.0",
@@ -29,7 +28,7 @@
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7",
-    "uuid": "^13.0.0"
+    "uuid": "^9.0.1"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -39,6 +38,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/uuid": "^9.0.8",
     "eslint": "^8",
     "eslint-config-next": "14.2.3",
     "postcss": "^8.5.6",
