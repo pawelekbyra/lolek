@@ -11,7 +11,7 @@ const LolekChat = () => {
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
-  const { messages, sendMessage, setMessages, isLoading } = useChat({
+  const { messages, sendMessage, setMessages, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
       body: { session_id: sessionId },
@@ -34,11 +34,6 @@ const LolekChat = () => {
     }
   };
 
-  useEffect(() => {
-    if (!input) {
-      setFile(null);
-    }
-  }, [input]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -95,21 +90,21 @@ const LolekChat = () => {
           onChange={e => setInput(e.target.value)}
           className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
           placeholder="Type a message or upload an image..."
-          disabled={isLoading}
+          disabled={status !== 'ready'}
         />
         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="ml-2 px-4 py-2 bg-gray-200 text-black rounded-lg hover:bg-gray-300 disabled:opacity-50"
-          disabled={isLoading}
+          disabled={status !== 'ready'}
         >
           Upload
         </button>
         <button
           type="submit"
           className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-          disabled={!input.trim() || isLoading}
+          disabled={(!input.trim() && !file) || status !== 'ready'}
         >
           Send
         </button>
