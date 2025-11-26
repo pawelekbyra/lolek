@@ -1,22 +1,21 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { v4 as uuidv4 } from 'uuid';
 import { DefaultChatTransport } from 'ai';
+import { useState, useRef, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import PlaceholderToolCard from './PlaceholderToolCard';
 
 const LolekChat = () => {
-  const [sessionId] = useState(uuidv4());
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sessionId] = useState(uuidv4());
   const { messages, sendMessage, setMessages } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
       body: { session_id: sessionId },
     }),
   });
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -30,12 +29,17 @@ const LolekChat = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      sendMessage({
-        parts: [
-          { type: 'text', text: input },
-          { type: 'file', file },
-        ],
-      });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        sendMessage({
+          parts: [
+            { type: 'text', text: input },
+            { type: 'image', image: base64String },
+          ],
+        });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -53,47 +57,50 @@ const LolekChat = () => {
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-gray-50">
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {messages.map((msg, index) => (
-          <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`px-4 py-2 rounded-lg shadow-md ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-black'}`}>
-              {msg.parts.map((part, i) => {
+        {messages.map((message, index) => (
+          <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`px-4 py-2 rounded-lg shadow-md ${message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-black'}`}>
+              {message.parts.map((part, i) => {
                 if (part.type === 'text') {
                   return <p key={i}>{part.text}</p>;
+                }
+                if (part.type === 'tool-invocation') {
+                  return <PlaceholderToolCard key={i} toolCall={part} />;
                 }
               })}
             </div>
           </div>
         ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="px-4 py-2 rounded-lg bg-white text-black shadow-md animate-pulse">
-              Lolek is thinking...
-            </div>
-          </div>
-        )}
       </div>
-      <form onSubmit={handleSubmit} className="p-4 border-t bg-white flex items-center">
+      <form
+        onSubmit={e => {
+          e.preventDefault();
+          sendMessage({
+            parts: [{ type: 'text', text: input }],
+          });
+          setInput('');
+        }}
+        className="p-4 border-t bg-white flex items-center"
+      >
         <input
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
           className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
           placeholder="Type a message or upload an image..."
-          disabled={isLoading}
         />
         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="ml-2 px-4 py-2 bg-gray-200 text-black rounded-lg hover:bg-gray-300 disabled:opacity-50"
-          disabled={isLoading}
         >
           Upload
         </button>
         <button
           type="submit"
           className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-          disabled={isLoading || !input.trim()}
+          disabled={!input.trim()}
         >
           Send
         </button>
