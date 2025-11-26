@@ -90,9 +90,8 @@ export async function POST(req: Request) {
         const similarMemories: { content: string; similarity: number }[] = await prisma.$queryRaw`
           SELECT content, 1 - (embedding <=> ${queryEmbeddingString}::vector) as similarity
           FROM "SemanticMemory"
-          WHERE "userId" = ${userId}
-          ORDER BY similarity DESC
-          LIMIT 3;
+          WHERE "userId" = ${userId} AND 1 - (embedding <=> ${queryEmbeddingString}::vector) > 0.7
+          ORDER BY similarity DESC;
         `;
 
         if (similarMemories.length > 0) {
