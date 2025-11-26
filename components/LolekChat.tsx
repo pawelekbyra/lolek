@@ -1,31 +1,44 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import { useState, useRef, useEffect } from 'react';
+import { DefaultChatTransport, UIMessage } from 'ai';
+import { useState, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import PlaceholderToolCard from './PlaceholderToolCard';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Artifact } from '@/app/page';
 
-const LolekChat = () => {
+type LolekChatProps = {
+  onArtifactGenerated: (artifact: Omit<Artifact, 'id' | 'isVisible'>) => void;
+};
+
+const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   const [input, setInput] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
-  const { messages, sendMessage, setMessages, status } = useChat({
+
+  const { messages, setMessages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
       body: { session_id: sessionId },
     }),
-  });
-
-  useEffect(() => {
-    const fetchHistory = async () => {
+    onToolCall: ({ toolCall }) => {
+      if (toolCall.toolName === 'generate_canvas_content') {
+        onArtifactGenerated(toolCall.args);
+        return {
+          // You can optionally return a UI component to render in place of the tool call
+        };
+      }
+    },
+    initialMessages: (async () => {
       const response = await fetch(`/api/lolek/history?session_id=${sessionId}`);
-      const history = await response.json();
-      setMessages(history);
-    };
-    fetchHistory();
-  }, [sessionId, setMessages]);
+      return await response.json();
+    })()
+  });
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -34,9 +47,7 @@ const LolekChat = () => {
     }
   };
 
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const submitMessage = () => {
     if (!input.trim() && !file) return;
 
     if (file) {
@@ -65,6 +76,11 @@ const LolekChat = () => {
     setFile(null);
   };
 
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    submitMessage();
+  };
+
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-gray-50">
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -73,9 +89,39 @@ const LolekChat = () => {
             <div className={`px-4 py-2 rounded-lg shadow-md ${message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-black'}`}>
               {message.parts.map((part, i) => {
                 if (part.type === 'text') {
-                  return <p key={i}>{part.text}</p>;
+                  return (
+                    <ReactMarkdown
+                      key={i}
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code(props) {
+                          const { children, className, ...rest } = props
+                          const match = /language-(\w+)/.exec(className || '')
+                          return match ? (
+                            <SyntaxHighlighter
+                              style={vscDarkPlus}
+                              language={match[1]}
+                              PreTag="div"
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code {...rest} className={className}>
+                              {children}
+                            </code>
+                          )
+                        }
+                      }}
+                    >
+                      {part.text}
+                    </ReactMarkdown>
+                  );
                 }
                 if (part.type === 'tool-invocation') {
+                  if (part.toolName === 'generate_canvas_content') {
+                    // Don't render a placeholder for the canvas tool
+                    return null;
+                  }
                   return <PlaceholderToolCard key={i} toolCall={part} />;
                 }
               })}
@@ -87,13 +133,19 @@ const LolekChat = () => {
         onSubmit={handleSubmit}
         className="p-4 border-t bg-white flex items-center"
       >
-        <input
-          type="text"
+        <textarea
           value={input}
           onChange={e => setInput(e.target.value)}
           className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
           placeholder="Type a message or upload an image..."
           disabled={status !== 'ready'}
+          rows={3}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              submitMessage();
+            }
+          }}
         />
         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
         <button
