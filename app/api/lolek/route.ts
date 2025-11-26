@@ -11,7 +11,10 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { getChatMessages, addChatMessage } from '../../../lib/db-postgres';
+import { getEmbedding } from '../../../lib/embedding';
+import { PrismaClient } from '@prisma/client';
 
+const prisma = new PrismaClient();
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
@@ -40,6 +43,9 @@ export async function POST(req: Request) {
     }
 
     const { messages, session_id: sessionId }: { messages: UIMessage[], session_id: string } = await req.json();
+
+    // Hardcoded userId until auth is implemented
+    const userId = "a0184a30-3151-4621-a249-51a87b1c19b6";
 
     // Fetch chat history from the database
     const initialMessages = await getChatMessages(sessionId);
@@ -74,6 +80,31 @@ export async function POST(req: Request) {
       console.log('[Router] Selected: smartModel. Reason: Failed to route, defaulting to smart model.');
     }
 
+    // RAG: Retrieve long-term memory
+    let memoryContext = '';
+    if (lastUserMessageContent) {
+      try {
+        const queryEmbedding = await getEmbedding(lastUserMessageContent);
+        const queryEmbeddingString = `[${queryEmbedding.join(',')}]`;
+
+        const similarMemories: { content: string; similarity: number }[] = await prisma.$queryRaw`
+          SELECT content, 1 - (embedding <=> ${queryEmbeddingString}::vector) as similarity
+          FROM "SemanticMemory"
+          WHERE "userId" = ${userId}
+          ORDER BY similarity DESC
+          LIMIT 3;
+        `;
+
+        if (similarMemories.length > 0) {
+          memoryContext = "Here is some relevant context from your long-term memory:\n" +
+                          similarMemories.map(mem => `- ${mem.content}`).join('\n');
+          console.log("Retrieved memories:", memoryContext);
+        }
+      } catch (error) {
+        console.error("Failed to retrieve memories:", error);
+      }
+    }
+
     const operationalAwareness = `
       OPERATIONAL SELF-AWARENESS (CRITICAL):
       YOU ARE the application running from the file "app/api/lolek/route.ts".
@@ -83,7 +114,7 @@ export async function POST(req: Request) {
       The tools defined in this file (e.g., delegateTaskToJules, vercel_get_logs) ARE YOUR TOOLS. You have access to them directly.
     `;
 
-    const finalSystem = `${system}\n${operationalAwareness}`;
+    const finalSystem = `${system}\n${memoryContext ? `\n### LONG-TERM MEMORY CONTEXT:\n${memoryContext}` : ''}\n${operationalAwareness}`;
 
     const result = streamText({
       model: selectedModel,
@@ -93,11 +124,35 @@ export async function POST(req: Request) {
         const lastUserMessageContentForDb = (lastUserMessage.parts as any[])
           .map(part => (part.type === 'text' ? part.text : '[image]'))
           .join(' ');
-        await addChatMessage(sessionId, 'user', lastUserMessageContentForDb);
-        await addChatMessage(sessionId, 'assistant', text);
+        await addChatMessage(sessionId, userId, 'user', lastUserMessageContentForDb);
+        await addChatMessage(sessionId, userId, 'assistant', text);
       },
       stopWhen: stepCountIs(5), // Enable multi-step tool calls
       tools: {
+        save_memory: tool({
+          description: 'Saves important information, user preferences, or facts into long-term memory.',
+          inputSchema: z.object({
+            content: z.string().describe('The information to save.'),
+            tags: z.array(z.string()).optional().describe('Optional tags to categorize the memory.'),
+          }),
+          execute: async ({ content, tags }) => {
+            try {
+              const embedding = await getEmbedding(content);
+              const embeddingString = `[${embedding.join(',')}]`;
+
+              // Use raw SQL to insert the vector
+              await prisma.$executeRaw`
+                INSERT INTO "SemanticMemory" (id, "userId", content, embedding, source)
+                VALUES (gen_random_uuid(), ${userId}, ${content}, ${embeddingString}::vector, 'Lolek Self-Correction');
+              `;
+
+              return { status: 'success', message: `Memory saved: "${content}"` };
+            } catch (error: any) {
+              console.error('Failed to save memory:', error);
+              return { error: `Could not save memory: ${error.message}` };
+            }
+          },
+        }),
         web_search: tool({
           description: 'Pozwala znaleźć aktualne informacje w sieci.',
           inputSchema: z.object({
