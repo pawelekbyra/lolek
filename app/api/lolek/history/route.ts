@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
     const messages = await getChatMessages(sessionId);
     return NextResponse.json(messages);
   } catch (error: any) {
+    console.error("SZCZEGÓŁOWY BŁĄD HISTORII:", error);
+    if (error.stack) console.error(error.stack);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
