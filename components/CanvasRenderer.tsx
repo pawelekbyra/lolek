@@ -26,30 +26,31 @@ export const CanvasRenderer = ({ artifact }: CanvasRendererProps) => {
     <div className="h-full bg-white p-6 shadow-sm overflow-y-auto">
       <h1 className="text-2xl font-bold mb-4">{artifact.title}</h1>
       {artifact.type === 'markdown' && (
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          className="prose prose-sm max-w-none"
-          components={{
-            code({ node, className, children, ...props }) {
-              const match = /language-(\w+)/.exec(className || '');
-              return match ? (
-                <SyntaxHighlighter
-                  style={vscDarkPlus}
-                  language={match[1]}
-                  PreTag="div"
-                >
-                  {String(children).replace(/\n$/, '')}
-                </SyntaxHighlighter>
-              ) : (
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {artifact.content}
-        </ReactMarkdown>
+        <div className="prose prose-sm max-w-none">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              code({ node, className, children, ...props }) {
+                const match = /language-(\w+)/.exec(className || '');
+                return match ? (
+                  <SyntaxHighlighter
+                    style={vscDarkPlus}
+                    language={match[1]}
+                    PreTag="div"
+                  >
+                    {String(children).replace(/\n$/, '')}
+                  </SyntaxHighlighter>
+                ) : (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              },
+            }}
+          >
+            {artifact.content}
+          </ReactMarkdown>
+        </div>
       )}
       {artifact.type === 'code' && (
          <SyntaxHighlighter
