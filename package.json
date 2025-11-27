@@ -19,6 +19,8 @@
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "langfuse": "^3.38.6",
+    "langfuse-vercel": "^3.38.6",
     "lucide-react": "^0.555.0",
     "next": "^14.2.32",
     "react": "^18",
