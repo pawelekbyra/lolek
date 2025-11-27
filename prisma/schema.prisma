@@ -98,7 +98,7 @@ model ProceduralMemory {
   @@unique([toolId])
 }
 
-model MediaContact {
+model Journalist {
   id        String   @id @default(cuid())
   name      String
   email     String?
