@@ -6,6 +6,7 @@ import { DefaultChatTransport, UIMessage } from 'ai';
 import { useState, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import PlaceholderToolCard from './PlaceholderToolCard';
+import ApprovalCard from './chat/ApprovalCard';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -21,7 +22,7 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
 
-  const { messages, setMessages, sendMessage, status } = useChat({
+  const { messages, setMessages, sendMessage, status, append } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
       body: { session_id: sessionId },
@@ -62,9 +63,9 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
           parts: [
             { type: 'text', text: input },
             {
-              type: 'file',
+              type: 'image',
               mediaType: file.type,
-              url: `data:${file.type};base64,${base64String.split(',')[1]}`,
+              image: `data:${file.type};base64,${base64String.split(',')[1]}`,
             },
           ],
         });
@@ -85,12 +86,28 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
     submitMessage();
   };
 
+  const handleApproveTool = (toolName: string, args: any) => {
+    // When approved, we ask the agent to proceed with confirmation
+    // We send a user message that tells the agent to retry with confirm: true
+    append({
+      role: 'user',
+      content: `I approve the execution of ${toolName}. Please proceed with the action using the same parameters and confirm=true.`
+    });
+  };
+
+  const handleRejectTool = (toolName: string) => {
+    append({
+        role: 'user',
+        content: `I reject the execution of ${toolName}. Do not proceed.`
+    });
+  };
+
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-gray-50">
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.map((message, index) => (
           <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`px-4 py-2 rounded-lg shadow-md ${message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-black'}`}>
+            <div className={`px-4 py-2 rounded-lg shadow-md max-w-full overflow-hidden ${message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-black'}`}>
               {message.parts.map((part, i) => {
                 if (part.type === 'text') {
                   return (
@@ -126,6 +143,21 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
                     // Don't render a placeholder for the canvas tool
                     return null;
                   }
+
+                  // Check for approval requirement
+                  if ('result' in part && typeof part.result === 'object' && part.result !== null && 'status' in part.result && (part.result as any).status === 'requires_approval') {
+                      const result = part.result as any;
+                      return (
+                          <ApprovalCard
+                            key={i}
+                            toolName={part.toolName}
+                            args={result.args}
+                            onApprove={() => handleApproveTool(part.toolName, result.args)}
+                            onReject={() => handleRejectTool(part.toolName)}
+                          />
+                      );
+                  }
+
                   return <PlaceholderToolCard key={i} toolCall={part} />;
                 }
               })}
