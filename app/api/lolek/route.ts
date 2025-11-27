@@ -118,6 +118,15 @@ export async function POST(req: Request) {
       model: selectedModel,
       system: finalSystem,
       messages: [...convertToCoreMessages(initialMessages), ...convertToCoreMessages(messages)],
+      maxSteps: 5,
+      experimental_telemetry: {
+         isEnabled: true,
+         metadata: {
+             userId,
+             sessionId,
+             projectId: myProjectId,
+         }
+      },
       onFinish: async ({ text }) => {
         const lastUserMessageContentForDb = (lastUserMessage.parts as any[])
           .map(part => (part.type === 'text' ? part.text : '[image]'))
@@ -342,8 +351,17 @@ export async function POST(req: Request) {
             branch: z.string().optional().describe("Nazwa gałęzi (brancha), na której ma być zapisany plik. Jeśli nie podana, używana jest główna gałąź."),
             owner: z.string().optional().default(myRepoOwner),
             repo: z.string().optional().default(myRepoName),
+            confirm: z.boolean().optional().default(false).describe('Wymagane potwierdzenie użytkownika. Ustaw na true, jeśli użytkownik zatwierdził akcję.'),
           }),
-          execute: async ({ path, content, commitMessage, branch, owner, repo }) => {
+          execute: async ({ path, content, commitMessage, branch, owner, repo, confirm }) => {
+            if (!confirm) {
+              return {
+                status: 'requires_approval',
+                message: 'Ta akcja wymaga zatwierdzenia przez użytkownika. Użyj parametru confirm=true, gdy otrzymasz zgodę.',
+                args: { path, content: '(hidden)', commitMessage, branch, owner, repo }
+              };
+            }
+
             const token = process.env.GITHUB_TOKEN;
             if (!token) return { error: 'Brak GITHUB_TOKEN.' };
 
@@ -429,8 +447,17 @@ export async function POST(req: Request) {
             fromBranch: z.string().optional().default('main').describe('Nazwa gałęzi, z której ma powstać nowa.'),
             owner: z.string().optional().default(myRepoOwner),
             repo: z.string().optional().default(myRepoName),
+            confirm: z.boolean().optional().default(false).describe('Wymagane potwierdzenie użytkownika. Ustaw na true, jeśli użytkownik zatwierdził akcję.'),
           }),
-          execute: async ({ branchName, fromBranch, owner, repo }) => {
+          execute: async ({ branchName, fromBranch, owner, repo, confirm }) => {
+            if (!confirm) {
+              return {
+                status: 'requires_approval',
+                message: 'Ta akcja wymaga zatwierdzenia przez użytkownika. Użyj parametru confirm=true, gdy otrzymasz zgodę.',
+                args: { branchName, fromBranch, owner, repo }
+              };
+            }
+
             const token = process.env.GITHUB_TOKEN;
             if (!token) return { error: 'Brak GITHUB_TOKEN.' };
             try {
@@ -467,8 +494,17 @@ export async function POST(req: Request) {
             base: z.string().optional().default('main').describe('Nazwa gałęzi docelowej.'),
             owner: z.string().optional().default(myRepoOwner),
             repo: z.string().optional().default(myRepoName),
+            confirm: z.boolean().optional().default(false).describe('Wymagane potwierdzenie użytkownika. Ustaw na true, jeśli użytkownik zatwierdził akcję.'),
           }),
-          execute: async ({ title, body, head, base, owner, repo }) => {
+          execute: async ({ title, body, head, base, owner, repo, confirm }) => {
+            if (!confirm) {
+              return {
+                status: 'requires_approval',
+                message: 'Ta akcja wymaga zatwierdzenia przez użytkownika. Użyj parametru confirm=true, gdy otrzymasz zgodę.',
+                args: { title, body, head, base, owner, repo }
+              };
+            }
+
             const token = process.env.GITHUB_TOKEN;
             if (!token) return { error: 'Brak GITHUB_TOKEN.' };
             try {
@@ -493,8 +529,17 @@ export async function POST(req: Request) {
           description: 'Wymusza nowe wdrożenie (redeploy) najnowszej wersji produkcyjnej projektu na Vercel.',
           inputSchema: z.object({
              projectId: z.string().optional().default(myProjectId),
+             confirm: z.boolean().optional().default(false).describe('Wymagane potwierdzenie użytkownika. Ustaw na true, jeśli użytkownik zatwierdził akcję.'),
           }),
-          execute: async ({ projectId }) => {
+          execute: async ({ projectId, confirm }) => {
+            if (!confirm) {
+              return {
+                status: 'requires_approval',
+                message: 'Ta akcja wymaga zatwierdzenia przez użytkownika. Użyj parametru confirm=true, gdy otrzymasz zgodę.',
+                args: { projectId }
+              };
+            }
+
             const token = process.env.VERCEL_API_TOKEN;
             const project = projectId || process.env.VERCEL_PROJECT_ID;
 
@@ -671,8 +716,16 @@ export async function POST(req: Request) {
           inputSchema: z.object({
             query: z.string().describe('The raw SQL query to execute.'),
             parameters: z.array(z.any()).optional().describe('An array of parameters to pass to the query.'),
+            confirm: z.boolean().optional().default(false).describe('Wymagane potwierdzenie użytkownika. Ustaw na true, jeśli użytkownik zatwierdził akcję.'),
           }),
-          execute: async ({ query, parameters }) => {
+          execute: async ({ query, parameters, confirm }) => {
+            if (!confirm) {
+              return {
+                status: 'requires_approval',
+                message: 'Ta akcja wymaga zatwierdzenia przez użytkownika. Użyj parametru confirm=true, gdy otrzymasz zgodę.',
+                args: { query, parameters }
+              };
+            }
             try {
               const result = await (prisma as any).$queryRawUnsafe(query, ...(parameters || []));
               return { status: 'success', result };
@@ -682,12 +735,20 @@ export async function POST(req: Request) {
           },
         }),
         run_utility_script: tool({
-          description: 'Runs a utility script in a sandboxed environment. WARNING: This tool can execute arbitrary code and is a major security risk.',
+          description: 'Runs a utility script in a sandboxed environment. WARNING: This tool can execute arbitrary code and is a major security risk. If execution fails, analyze the error and try to fix the code (Self-Correction).',
           inputSchema: z.object({
             code: z.string().describe('The code to execute.'),
             language: z.enum(['javascript', 'python']).describe('The language of the code.'),
+            confirm: z.boolean().optional().default(false).describe('Wymagane potwierdzenie użytkownika. Ustaw na true, jeśli użytkownik zatwierdził akcję.'),
           }),
-          execute: async ({ code, language }) => {
+          execute: async ({ code, language, confirm }) => {
+            if (!confirm) {
+              return {
+                status: 'requires_approval',
+                message: 'Ta akcja wymaga zatwierdzenia przez użytkownika. Użyj parametru confirm=true, gdy otrzymasz zgodę.',
+                args: { code, language }
+              };
+            }
             if (language === 'javascript') {
               try {
                 const sandbox = {};
@@ -695,7 +756,11 @@ export async function POST(req: Request) {
                 const result = vm.runInContext(code, sandbox);
                 return { status: 'success', result };
               } catch (error: any) {
-                return { error: `Failed to execute javascript: ${error.message}` };
+                return {
+                  status: 'error',
+                  error: `Failed to execute javascript: ${error.message}`,
+                  instruction: "Analyze the error message and retry with corrected code."
+                };
               }
             } else if (language === 'python') {
               return new Promise((resolve) => {
@@ -712,7 +777,12 @@ export async function POST(req: Request) {
                   if (code === 0) {
                     resolve({ status: 'success', stdout });
                   } else {
-                    resolve({ error: `Failed to execute python: ${stderr}`, stderr });
+                    resolve({
+                      status: 'error',
+                      error: `Failed to execute python. Stderr: ${stderr}`,
+                      stderr,
+                      instruction: "The code execution failed. Analyze the stderr, fix the code, and try again."
+                    });
                   }
                 });
               });
@@ -725,8 +795,17 @@ export async function POST(req: Request) {
             action: z.enum(['read', 'update', 'migrate']).describe('The action to perform.'),
             content: z.string().optional().describe('The new content of the schema.prisma file.'),
             migration_name: z.string().optional().describe('The name of the migration.'),
+            confirm: z.boolean().optional().default(false).describe('Wymagane potwierdzenie użytkownika. Ustaw na true, jeśli użytkownik zatwierdził akcję.'),
           }),
-          execute: async ({ action, content, migration_name }) => {
+          execute: async ({ action, content, migration_name, confirm }) => {
+            if (action !== 'read' && !confirm) {
+              return {
+                status: 'requires_approval',
+                message: 'Ta akcja wymaga zatwierdzenia przez użytkownika. Użyj parametru confirm=true, gdy otrzymasz zgodę.',
+                args: { action, content: '(hidden)', migration_name }
+              };
+            }
+
             const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
             if (action === 'read') {
               try {
