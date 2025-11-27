@@ -1,0 +1,9 @@
+-- This is an empty migration file.
+-- It is intentionally left blank to align Prisma's migration history with a schema change that has already been manually applied to the database.
+--
+-- Context:
+-- The `MediaContact` model in `schema.prisma` was renamed to `Journalist`.
+-- The corresponding table in the database was already named `Journalist`.
+-- Therefore, no SQL operation is needed to alter the database schema.
+-- This empty migration serves to mark the schema change as "applied" in Prisma's history,
+-- preventing `prisma migrate` from trying to generate a redundant migration in the future.

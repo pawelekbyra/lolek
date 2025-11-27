@@ -770,6 +770,41 @@ export async function POST(req: Request) {
             }
           },
         }),
+        manage_resource: tool({
+          description: 'Manages structured data resources. Allows creating, updating, deleting, and listing records for any database model, including bulk operations.',
+          inputSchema: z.object({
+            model: z.string().describe("The name of the model to interact with (e.g., 'Journalist', 'User'). Case-insensitive."),
+            action: z.enum(['create', 'update', 'delete', 'list', 'updateMany', 'deleteMany']).describe("The operation to perform."),
+            data: z.any().describe("The data for the operation. For 'create'/'update'/'updateMany', this is the record data. For 'delete'/'deleteMany'/'list', this can be a 'where' clause."),
+          }),
+          execute: async ({ model, action, data }) => {
+            if (!model || model.startsWith('_') || model.startsWith('$')) {
+              return { error: `Invalid model name provided: ${model}` };
+            }
+
+            // Handle case-insensitivity: convert PascalCase to camelCase for Prisma Client
+            const modelName = model.charAt(0).toLowerCase() + model.slice(1);
+
+            const prismaModel = (prisma as any)[modelName];
+            if (!prismaModel) {
+              return { error: `Model '${modelName}' not found on Prisma client.` };
+            }
+
+            const finalAction = action === 'list' ? 'findMany' : action;
+
+            if (typeof prismaModel[finalAction] !== 'function') {
+              return { error: `Action '${finalAction}' is not a valid function on model '${modelName}'.` };
+            }
+
+            try {
+              const result = await prismaModel[finalAction](data);
+              return { status: 'success', result };
+            } catch (error: any) {
+              console.error(`Error in manage_resource for ${modelName}.${finalAction}:`, error);
+              return { error: `Operation failed: ${error.message}`, stack: error.stack };
+            }
+          },
+        }),
       },
     });
 
