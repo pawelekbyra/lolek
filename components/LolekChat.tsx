@@ -21,11 +21,24 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
+  const [userId, setUserId] = useState<string>('');
+
+  useEffect(() => {
+    // Generate or retrieve userId from localStorage
+    if (typeof window !== 'undefined') {
+      let storedUserId = localStorage.getItem('lolek_user_id');
+      if (!storedUserId) {
+        storedUserId = uuidv4();
+        localStorage.setItem('lolek_user_id', storedUserId);
+      }
+      setUserId(storedUserId);
+    }
+  }, []);
 
   const { messages, setMessages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
-      body: { session_id: sessionId },
+      body: { session_id: sessionId, userId: userId },
     }),
     onToolCall: ({ toolCall }) => {
       if (toolCall.toolName === 'generate_canvas_content') {
@@ -37,13 +50,16 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   });
 
   useEffect(() => {
+    if (!userId) return; // Wait for userId to be initialized
+
     const fetchHistory = async () => {
+      // Pass userId if the history endpoint supports it, otherwise keep it simple
       const response = await fetch(`/api/lolek/history?session_id=${sessionId}`);
       const historyMessages = await response.json();
       setMessages(historyMessages);
     };
     fetchHistory();
-  }, [sessionId, setMessages]);
+  }, [sessionId, setMessages, userId]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
