@@ -44,10 +44,14 @@ export async function POST(req: Request) {
       console.warn('Persona file not found at:', personaPath);
     }
 
-    const { messages, session_id: sessionId }: { messages: UIMessage[], session_id: string } = await req.json();
+    const { messages, session_id: sessionId, userId }: { messages: UIMessage[], session_id: string, userId?: string } = await req.json();
 
-    // Hardcoded userId until auth is implemented
-    const userId = "a0184a30-3151-4621-a249-51a87b1c19b6";
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'Brak `userId` w ciele zapytania.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     // Fetch chat history from the database
     const initialMessages = await getChatMessages(sessionId);
@@ -854,18 +858,17 @@ export async function POST(req: Request) {
           description: 'Manages structured data resources. Allows creating, updating, deleting, and listing records for any database model, including bulk operations.',
           inputSchema: z.object({
             model: z.string().describe("The name of the model to interact with (e.g., 'Journalist', 'User'). Case-insensitive."),
-            action: z.enum(['create', 'update', 'delete', 'list', 'updateMany', 'deleteMany']).describe("The operation to perform."),
-            data: z.any().describe("The data for the operation. For 'create'/'update'/'updateMany', this is the record data. For 'delete'/'deleteMany'/'list', this can be a 'where' clause."),
+            action: z.enum(['create', 'update', 'delete', 'list', 'count', 'updateMany', 'deleteMany']).describe("The operation to perform."),
+            data: z.any().optional().describe("The data for the operation. For 'create'/'update'/'updateMany', this is the record data. For 'delete'/'deleteMany'/'list'/'count', this can be a 'where' clause."),
           }),
           execute: async ({ model, action, data }) => {
             if (!model || model.startsWith('_') || model.startsWith('$')) {
               return { error: `Invalid model name provided: ${model}` };
             }
 
-            // Handle case-insensitivity: convert PascalCase to camelCase for Prisma Client
             const modelName = model.charAt(0).toLowerCase() + model.slice(1);
-
             const prismaModel = (prisma as any)[modelName];
+
             if (!prismaModel) {
               return { error: `Model '${modelName}' not found on Prisma client.` };
             }
@@ -877,7 +880,7 @@ export async function POST(req: Request) {
             }
 
             try {
-              const result = await prismaModel[finalAction](data);
+              const result = await prismaModel[finalAction](data || {});
               return { status: 'success', result };
             } catch (error: any) {
               console.error(`Error in manage_resource for ${modelName}.${finalAction}:`, error);
@@ -893,59 +896,55 @@ export async function POST(req: Request) {
             userId: z.string().describe('ID użytkownika, dla którego zadanie jest uruchamiane/zatrzymywane.'),
           }),
           execute: async ({ action, taskType, userId }) => {
-             // 1. Zlokalizuj/Utwórz rekord LongTermTask dla userId i taskType.
-             // We use 'description' field to store taskType for now or we could add a field.
-             // Assuming description starts with taskType.
-             const taskDescription = `${taskType} for user ${userId}`;
+            const taskDescription = `${taskType} for user ${userId}`;
 
-             let task = await prisma.longTermTask.findFirst({
-                 where: {
-                     userId: userId,
-                     description: taskDescription
-                 }
-             });
+            try {
+              let task = await prisma.longTermTask.findFirst({
+                where: { userId: userId, description: taskDescription },
+              });
 
-             if (!task) {
-                 task = await prisma.longTermTask.create({
-                     data: {
-                         userId: userId,
-                         description: taskDescription,
-                         status: 'pending'
-                     }
-                 });
-             }
+              if (!task) {
+                task = await prisma.longTermTask.create({
+                  data: { userId: userId, description: taskDescription, status: 'pending' },
+                });
+              }
 
-             if (action === 'start') {
-                 // Update status
-                 await prisma.longTermTask.update({
-                     where: { id: task.id },
-                     data: { status: 'in_progress' }
-                 });
+              if (action === 'start') {
+                await prisma.longTermTask.update({
+                  where: { id: task.id },
+                  data: { status: 'in_progress' },
+                });
 
-                 // Trigger the job
-                 try {
-                     const run = await client.sendEvent({
-                        name: "start-journalist-collection",
-                        payload: {
-                            userId: userId,
-                            initialQuery: "dziennikarze email Polska" // Default starting point
-                        }
-                     });
-                     return { status: 'started', runId: run.id, taskId: task.id };
-                 } catch (e: any) {
-                     return { error: `Failed to trigger job: ${e.message}` };
-                 }
+                const run = await client.sendEvent({
+                  name: "start-journalist-collection",
+                  payload: {
+                    userId: userId,
+                    initialQuery: "dziennikarze email Polska",
+                  },
+                });
+                return { status: 'started', runId: run.id, taskId: task.id };
 
-             } else if (action === 'stop') {
-                 await prisma.longTermTask.update({
-                     where: { id: task.id },
-                     data: { status: 'stopped' }
-                 });
-                 return { status: 'stopped', taskId: task.id };
+              } else if (action === 'stop') {
+                await prisma.longTermTask.update({
+                  where: { id: task.id },
+                  data: { status: 'stopped' },
+                });
+                return { status: 'stopped', taskId: task.id };
 
-             } else if (action === 'status') {
-                 return { status: task.status, taskId: task.id };
-             }
+              } else if (action === 'status') {
+                return { status: task.status, taskId: task.id };
+              }
+            } catch (error: any) {
+              // Sprawdzenie, czy błąd jest odpowiedzią HTML, a nie JSON
+              if (error.message && error.message.includes('Unexpected token < in JSON at position 0')) {
+                return {
+                  error: 'Trigger.dev returned an invalid (non-JSON) response.',
+                  details: 'This is often caused by a 404 or 500 error page. Please check the Trigger.dev dashboard for logs.'
+                };
+              }
+              // Zwrócenie ogólnego błędu
+              return { error: `Failed to manage long-term task: ${error.message}` };
+            }
           },
         }),
       },
