@@ -2,7 +2,7 @@
 
 import { Artifact } from '@/app/page';
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport, UIMessage } from 'ai';
+import { DefaultChatTransport, UIMessage, isToolOrDynamicToolUIPart, getToolOrDynamicToolName } from 'ai';
 import { useState, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import PlaceholderToolCard from './PlaceholderToolCard';
@@ -22,7 +22,8 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
 
-  const { messages, setMessages, sendMessage, status, append } = useChat({
+  // Removed 'append' from destructuring as it is not part of UseChatHelpers in the new SDK
+  const { messages, setMessages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
       body: { session_id: sessionId },
@@ -63,9 +64,9 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
           parts: [
             { type: 'text', text: input },
             {
-              type: 'image',
+              type: 'file',
               mediaType: file.type,
-              image: `data:${file.type};base64,${base64String.split(',')[1]}`,
+              url: `data:${file.type};base64,${base64String.split(',')[1]}`,
             },
           ],
         });
@@ -89,16 +90,22 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   const handleApproveTool = (toolName: string, args: any) => {
     // When approved, we ask the agent to proceed with confirmation
     // We send a user message that tells the agent to retry with confirm: true
-    append({
+    sendMessage({
       role: 'user',
-      content: `I approve the execution of ${toolName}. Please proceed with the action using the same parameters and confirm=true.`
+      parts: [{
+        type: 'text',
+        text: `I approve the execution of ${toolName}. Please proceed with the action using the same parameters and confirm=true.`
+      }]
     });
   };
 
   const handleRejectTool = (toolName: string) => {
-    append({
+    sendMessage({
         role: 'user',
-        content: `I reject the execution of ${toolName}. Do not proceed.`
+        parts: [{
+          type: 'text',
+          text: `I reject the execution of ${toolName}. Do not proceed.`
+        }]
     });
   };
 
@@ -138,27 +145,38 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
                     </ReactMarkdown>
                   );
                 }
-                if (part.type === 'tool-invocation') {
-                  if ('toolName' in part && part.toolName === 'generate_canvas_content') {
+                if (isToolOrDynamicToolUIPart(part)) {
+                  const toolName = getToolOrDynamicToolName(part);
+                  if (toolName === 'generate_canvas_content') {
                     // Don't render a placeholder for the canvas tool
                     return null;
                   }
 
                   // Check for approval requirement
-                  if ('result' in part && typeof part.result === 'object' && part.result !== null && 'status' in part.result && (part.result as any).status === 'requires_approval') {
-                      const result = part.result as any;
+                  if (part.state === 'output-available' && part.output && typeof part.output === 'object' && 'status' in part.output && (part.output as any).status === 'requires_approval') {
+                      const output = part.output as any;
+                      // part.input should be available here
+                      const args = part.input;
                       return (
                           <ApprovalCard
                             key={i}
-                            toolName={part.toolName}
-                            args={result.args}
-                            onApprove={() => handleApproveTool(part.toolName, result.args)}
-                            onReject={() => handleRejectTool(part.toolName)}
+                            toolName={toolName}
+                            args={args}
+                            onApprove={() => handleApproveTool(toolName, args)}
+                            onReject={() => handleRejectTool(toolName)}
                           />
                       );
                   }
 
-                  return <PlaceholderToolCard key={i} toolCall={part} />;
+                  // Pass a constructed object that matches what PlaceholderToolCard likely expects or just the part
+                  // PlaceholderToolCard expects { toolCall: { toolName, args } } based on my reading of it
+                  // But 'toolCall' in props seems to be 'any'.
+                  // I will construct a compatible object.
+                  const toolCallShim = {
+                    toolName: toolName,
+                    args: (part as any).input || (part as any).args
+                  };
+                  return <PlaceholderToolCard key={i} toolCall={toolCallShim} />;
                 }
               })}
             </div>
