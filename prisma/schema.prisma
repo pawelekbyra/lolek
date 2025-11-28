@@ -101,7 +101,7 @@ model ProceduralMemory {
 model Journalist {
   id        String   @id @default(cuid())
   name      String
-  email     String?
+  email     String?  @unique
   outlet    String? // e.g., "Gazeta Wrocławska"
   role      String? // e.g., "Editor", "Journalist"
   notes     String? // e.g., "Topics: Sports, Ecology"

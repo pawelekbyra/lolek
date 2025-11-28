@@ -7,7 +7,7 @@ import {
   generateObject,
 } from 'ai';
 import { google } from '@ai-sdk/google';
-import { observe } from 'langfuse-vercel';
+// import { observe } from 'langfuse-vercel'; // Removed temporarily as it is not exported or causing issues
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
@@ -16,6 +16,8 @@ import { getEmbedding } from '../../../lib/embedding';
 import { PrismaClient } from '@prisma/client';
 import { spawn } from 'child_process';
 import vm from 'vm';
+import { client } from '../../../trigger/client';
+import { journalistCollector } from '../../../trigger/journalistCollector';
 
 const prisma = new PrismaClient();
 export const dynamic = 'force-dynamic';
@@ -119,13 +121,13 @@ export async function POST(req: Request) {
       model: selectedModel,
       system: finalSystem,
       messages: [...convertToCoreMessages(initialMessages), ...convertToCoreMessages(messages)],
-      experimental_telemetry: observe({
-         projectId: myProjectId,
-         metadata: {
-             userId,
-             sessionId,
-         }
-      }),
+      // experimental_telemetry: observe({
+      //    projectId: myProjectId,
+      //    metadata: {
+      //        userId,
+      //        sessionId,
+      //    }
+      // }),
       onFinish: async ({ text }) => {
         const lastUserMessageContentForDb = (lastUserMessage.parts as any[])
           .map(part => (part.type === 'text' ? part.text : '[image]'))
@@ -881,6 +883,69 @@ export async function POST(req: Request) {
               console.error(`Error in manage_resource for ${modelName}.${finalAction}:`, error);
               return { error: `Operation failed: ${error.message}`, stack: error.stack };
             }
+          },
+        }),
+        manage_long_term_task: tool({
+          description: 'Zarządza długotrwałymi zadaniami: rozpoczęcie, zatrzymanie lub sprawdzenie statusu (np. Journal Collector).',
+          inputSchema: z.object({
+            action: z.enum(['start', 'stop', 'status']).describe('Akcja do wykonania.'),
+            taskType: z.enum(['JournalistCollector']).describe('Typ zadania (domyślnie JournalistCollector).'),
+            userId: z.string().describe('ID użytkownika, dla którego zadanie jest uruchamiane/zatrzymywane.'),
+          }),
+          execute: async ({ action, taskType, userId }) => {
+             // 1. Zlokalizuj/Utwórz rekord LongTermTask dla userId i taskType.
+             // We use 'description' field to store taskType for now or we could add a field.
+             // Assuming description starts with taskType.
+             const taskDescription = `${taskType} for user ${userId}`;
+
+             let task = await prisma.longTermTask.findFirst({
+                 where: {
+                     userId: userId,
+                     description: taskDescription
+                 }
+             });
+
+             if (!task) {
+                 task = await prisma.longTermTask.create({
+                     data: {
+                         userId: userId,
+                         description: taskDescription,
+                         status: 'pending'
+                     }
+                 });
+             }
+
+             if (action === 'start') {
+                 // Update status
+                 await prisma.longTermTask.update({
+                     where: { id: task.id },
+                     data: { status: 'in_progress' }
+                 });
+
+                 // Trigger the job
+                 try {
+                     const run = await client.sendEvent({
+                        name: "start-journalist-collection",
+                        payload: {
+                            userId: userId,
+                            initialQuery: "dziennikarze email Polska" // Default starting point
+                        }
+                     });
+                     return { status: 'started', runId: run.id, taskId: task.id };
+                 } catch (e: any) {
+                     return { error: `Failed to trigger job: ${e.message}` };
+                 }
+
+             } else if (action === 'stop') {
+                 await prisma.longTermTask.update({
+                     where: { id: task.id },
+                     data: { status: 'stopped' }
+                 });
+                 return { status: 'stopped', taskId: task.id };
+
+             } else if (action === 'status') {
+                 return { status: task.status, taskId: task.id };
+             }
           },
         }),
       },
