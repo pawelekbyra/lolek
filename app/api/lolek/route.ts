@@ -951,7 +951,7 @@ export async function POST(req: Request) {
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toDataStreamResponse();
 
   } catch (error: any) {
     console.error('Error in /api/lolek:', error);
