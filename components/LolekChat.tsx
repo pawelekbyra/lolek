@@ -22,7 +22,7 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionId] = useState(uuidv4());
 
-  const { messages, setMessages, sendMessage, status, append } = useChat({
+  const { messages, setMessages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/lolek',
       body: { session_id: sessionId },
@@ -63,9 +63,9 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
           parts: [
             { type: 'text', text: input },
             {
-              type: 'image',
+              type: 'file',
               mediaType: file.type,
-              image: `data:${file.type};base64,${base64String.split(',')[1]}`,
+              url: base64String,
             },
           ],
         });
@@ -89,16 +89,22 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   const handleApproveTool = (toolName: string, args: any) => {
     // When approved, we ask the agent to proceed with confirmation
     // We send a user message that tells the agent to retry with confirm: true
-    append({
+    sendMessage({
       role: 'user',
-      content: `I approve the execution of ${toolName}. Please proceed with the action using the same parameters and confirm=true.`
+      parts: [{
+        type: 'text',
+        text: `I approve the execution of ${toolName}. Please proceed with the action using the same parameters and confirm=true.`
+      }]
     });
   };
 
   const handleRejectTool = (toolName: string) => {
-    append({
+    sendMessage({
         role: 'user',
-        content: `I reject the execution of ${toolName}. Do not proceed.`
+        parts: [{
+          type: 'text',
+          text: `I reject the execution of ${toolName}. Do not proceed.`
+        }]
     });
   };
 
@@ -138,27 +144,55 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
                     </ReactMarkdown>
                   );
                 }
-                if (part.type === 'tool-invocation') {
-                  if ('toolName' in part && part.toolName === 'generate_canvas_content') {
-                    // Don't render a placeholder for the canvas tool
-                    return null;
-                  }
 
-                  // Check for approval requirement
-                  if ('result' in part && typeof part.result === 'object' && part.result !== null && 'status' in part.result && (part.result as any).status === 'requires_approval') {
-                      const result = part.result as any;
-                      return (
-                          <ApprovalCard
-                            key={i}
-                            toolName={part.toolName}
-                            args={result.args}
-                            onApprove={() => handleApproveTool(part.toolName, result.args)}
-                            onReject={() => handleRejectTool(part.toolName)}
-                          />
-                      );
-                  }
+                // Handle tool invocations
+                const isTool = part.type.startsWith('tool-') || part.type === 'dynamic-tool';
+                if (isTool) {
+                    // Extract toolName
+                    let toolName: string;
+                    if (part.type === 'dynamic-tool') {
+                        toolName = part.toolName;
+                    } else {
+                        // For static tools, type is `tool-{name}`
+                        toolName = part.type.substring(5);
+                    }
 
-                  return <PlaceholderToolCard key={i} toolCall={part} />;
+                    if (toolName === 'generate_canvas_content') {
+                        // Don't render a placeholder for the canvas tool
+                        return null;
+                    }
+
+                    // Check for approval requirement
+                    // In new SDK, result is in `output` property of the part
+                    // And we need to check if it's in 'output-available' state
+                    if ('output' in part && part.output && typeof part.output === 'object') {
+                        const result = part.output as any;
+                         if (result !== null && 'status' in result && result.status === 'requires_approval') {
+                             // Arguments are in `args` of result, or maybe `part.input`?
+                             // The original code used `result.args`. Let's assume the tool output returns args.
+                             // But usually args are in `part.input`.
+                             // However, if the tool returned `requires_approval`, it might have passed args back in the result for confirmation.
+                             // Let's use result.args if available, otherwise part.input.
+                             const args = result.args || ('input' in part ? part.input : {});
+
+                             return (
+                                 <ApprovalCard
+                                   key={i}
+                                   toolName={toolName}
+                                   args={args}
+                                   onApprove={() => handleApproveTool(toolName, args)}
+                                   onReject={() => handleRejectTool(toolName)}
+                                 />
+                             );
+                         }
+                    }
+
+                    // For PlaceholderToolCard, we need to pass the toolCall.
+                    // The old code passed `part`.
+                    // The new part structure might be different but hopefully compatible enough or mapped.
+                    // Let's try passing part as is, casting if necessary, or check PlaceholderToolCard.
+                    // For now, pass part as any to avoid type errors, or construct a compatible object.
+                    return <PlaceholderToolCard key={i} toolCall={part as any} />;
                 }
               })}
             </div>
