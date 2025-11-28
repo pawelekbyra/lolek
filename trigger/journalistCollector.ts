@@ -1,230 +1,214 @@
-import { task, wait } from "@trigger.dev/sdk/v3";
-import { PrismaClient } from "@prisma/client";
-import { google } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { client } from "./client";
+import { eventTrigger } from "@trigger.dev/sdk";
 import { z } from "zod";
+import { PrismaClient } from "@prisma/client";
+import { google } from '@ai-sdk/google';
+import { generateObject } from 'ai';
 
 const prisma = new PrismaClient();
 
-// Define schema for structured output from LLM
-const JournalistSchema = z.object({
-  name: z.string(),
-  email: z.string().email().optional(),
-  outlet: z.string().optional(),
-  role: z.string().optional(),
-  notes: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+// Define input schema for the job
+const jobInputSchema = z.object({
+  userId: z.string(),
+  initialQuery: z.string().optional(),
 });
 
-const SearchResultsSchema = z.object({
-  journalists: z.array(JournalistSchema),
-  nextRegionOrCity: z.string().optional().describe("The next region or city to search for, based on the current one."),
-});
-
-type SearchResults = z.infer<typeof SearchResultsSchema>;
-
-export const journalistCollector = task({
+export const journalistCollector = client.defineJob({
   id: "journalist-collector",
-  run: async (payload: { userId: string, initialRegion?: string }) => {
-    const { userId, initialRegion } = payload;
+  name: "Journalist Data Collector",
+  version: "1.0.1",
+  trigger: eventTrigger({
+    name: "start-journalist-collection",
+    schema: jobInputSchema,
+  }),
+  run: async (payload, io, ctx) => {
+    const { userId, initialQuery } = payload;
 
-    // Safety break: 10 hours * 60 minutes = 600 iterations (if 1 min wait)
-    const MAX_ITERATIONS = 600;
-    let iteration = 0;
+    // Log start
+    await io.logger.info("Starting Journalist Collector task", { userId, initialQuery });
 
-    console.log(`Starting Journalist Collector for user ${userId}`);
+    // Initialize state or get from DB if resuming
+    const memoryKey = `JournalistCollector-${userId}`;
 
-    // --- State Resumption ---
-    // 1. Get the task record first
-    const taskRecord = await prisma.longTermTask.findFirst({
-        where: {
-          userId: userId,
-          description: "JournalistCollector",
-          // We don't filter by status here yet, as we might be restarting a stopped task
-        },
-      });
+    // We fetch the initial state in a runTask to ensure it's memoized but here it's fine to read from DB once at start of function?
+    // Actually, on resume, we might want to re-read the DB if we crashed?
+    // Trigger v2 replay means the function runs from top.
+    // If we read DB outside runTask, it executes every time.
+    // But since we want to resume from *persisted* state, reading DB is what we want.
+    // However, for deterministic replay, better to wrap it or rely on the logic below.
 
-    if (!taskRecord) {
-        console.error("Task record not found. Cannot proceed.");
-        return;
-    }
+    // Actually, the loop state `currentQuery` needs to be managed carefully.
+    // In Trigger v2, we should use the loop structure provided or just standard JS loop with runTask inside.
 
-    // 2. Determine starting region: Payload > Saved State > Default
-    let currentRegion = initialRegion;
-
-    if (!currentRegion) {
-        // Try to fetch last state from the latest DecisionLog for this task
-        const lastLog = await prisma.decisionLog.findFirst({
-            where: {
-                taskId: taskRecord.id,
-            },
-            orderBy: {
-                timestamp: 'desc',
-            },
+    let currentQuery = await io.runTask("get-initial-state", async () => {
+         const savedMemory = await prisma.proceduralMemory.findFirst({
+            where: { toolId: memoryKey }
         });
-
-        if (lastLog) {
-            try {
-                const decision = JSON.parse(lastLog.decision);
-                if (decision.nextRegion) {
-                    currentRegion = decision.nextRegion;
-                    console.log(`Resuming from saved state (DecisionLog): ${currentRegion}`);
-                }
-            } catch (e) {
-                // Ignore parsing errors, might be a text log
-            }
+        // If we have saved memory, use it. ONLY use initialQuery if no memory exists.
+        if (savedMemory && savedMemory.steps) {
+            return savedMemory.steps;
         }
-    }
+        return initialQuery || "dziennikarze email Polska";
+    });
 
-    if (!currentRegion) {
-        currentRegion = "Dolny Śląsk - Wrocław";
-        console.log(`No saved state found. Starting fresh: ${currentRegion}`);
-    }
+    await io.logger.info(`Starting with query: ${currentQuery}`);
 
+    let isRunning = true;
+    const maxDuration = 10 * 60 * 60 * 1000; // 10 hours
+    // Use the run startedAt time from context to ensure consistent duration check across replays
+    const startTime = ctx.run.startedAt.getTime();
 
-    while (iteration < MAX_ITERATIONS) {
-      iteration++;
+    // In V2, loops can be standard while loops as long as everything inside is runTask.
 
-      // 3. Check Task Status (Live check)
-      const currentTaskStatus = await prisma.longTermTask.findUnique({
-        where: { id: taskRecord.id },
-      });
+    let iterationCount = 0;
 
-      if (!currentTaskStatus || currentTaskStatus.status !== "in_progress") {
-        console.log("Task stopped or not in_progress. Stopping execution.");
-        break;
-      }
+    while (isRunning) {
+        iterationCount++;
+        // Use iteration count as key suffix to ensure uniqueness but determinism within the loop structure
+        // Note: In strict V2 replay, local variables reset. We rely on the fact that io.runTask caches results.
+        // If we restart, iterationCount is 0.
+        // But io.runTask("search-1") will return cached result.
+        // io.runTask("search-2") etc.
+        // So we just need to ensure we don't accidentally reuse keys if we logically wanted a NEW step.
+        // But here we want to replay history. So iterationCount starting at 0 and incrementing matches the history log.
+        // So "search-1" corresponds to the first search ever done in this run.
 
-      console.log(`Iteration ${iteration}: Searching for journalists in ${currentRegion}`);
+        // However, Date.now() in the key is dangerous if it's not wrapped!
+        // The previous code had `iter-${iterationCount}-${Date.now()}` which is BAD because it changes on replay.
+        // Fixed to use just iterationCount.
+        // If we rely on `currentQuery` being updated at the end of loop via DB,
+        // when we restart, we fetch `currentQuery` from DB (in the first step above).
+        // So the loop starts fresh but with the correct query.
+        // So we don't need to worry about "replaying previous iterations" because the function *actually* restarts.
+        // Wait, Trigger.dev V2 *replays* the function execution history from the log.
+        // If we have a loop, it replays the loop iterations.
+        // If the history gets too long, it might be an issue.
+        // But for 10 hours?
+        // Trigger.dev documentation says "Long running jobs" should be split or use specific patterns.
+        // But with standard V2, the history limit is the main constraint.
+        // If we assume a few iterations per minute, 10 hours is huge.
+        // The user asked for "up to 10 hours".
+        // Standard V2 might struggle with thousands of steps in one run.
+        // Ideally we would recursively trigger the job itself?
+        // "Resumability" via DB suggests we can just finish and restart.
+        // But let's implement the loop with runTask as requested.
 
-      // 4. Web Search
-      const apiKey = process.env.TAVILY_API_KEY;
-      if (!apiKey) {
-        throw new Error("TAVILY_API_KEY is not set");
-      }
-
-      const query = `dziennikarze email, ${currentRegion}`;
-      let searchResults = "";
-
-      try {
-        const response = await fetch('https://api.tavily.com/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ api_key: apiKey, query: query, max_results: 5 }),
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            searchResults = JSON.stringify(data.results);
-        } else {
-            console.error(`Tavily API error: ${response.status}`);
-            await wait.for({ seconds: 10 });
-            continue;
-        }
-      } catch (e) {
-        console.error("Search failed", e);
-        await wait.for({ seconds: 10 });
-        continue;
-      }
-
-      // 5. Extract Data using LLM
-      const model = google('gemini-1.5-pro'); // Corrected model name
-
-      try {
-        const { text } = await generateText({
-            model: model as any,
-            prompt: `
-              Analyze the following search results for query "${query}".
-              Extract a list of journalists with their emails, outlets, and roles.
-              Ensure emails are valid.
-              Also, suggest the NEXT logical city or region in Poland to search for after "${currentRegion}" to continue a nationwide sweep.
-
-              Return a raw JSON object (no markdown formatting) with this structure:
-              {
-                "journalists": [
-                  { "name": "...", "email": "...", "outlet": "...", "role": "...", "notes": "...", "tags": ["..."] }
-                ],
-                "nextRegionOrCity": "..."
-              }
-
-              Search Results:
-              ${searchResults}
-            `,
-        });
-
-        const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const rawObject = JSON.parse(jsonString);
-        const object = SearchResultsSchema.parse(rawObject);
-
-        // 6. Upsert Data
-        for (const journalist of object.journalists) {
-            if (journalist.email) {
-                try {
-                    await prisma.journalist.upsert({
-                        where: { email: journalist.email },
-                        update: {
-                            name: journalist.name,
-                            outlet: journalist.outlet,
-                            role: journalist.role,
-                            updatedAt: new Date(),
-                        },
-                        create: {
-                            name: journalist.name,
-                            email: journalist.email,
-                            outlet: journalist.outlet,
-                            role: journalist.role,
-                            notes: journalist.notes,
-                            tags: journalist.tags || [currentRegion!],
-                        }
-                    });
-                    console.log(`Upserted journalist: ${journalist.email}`);
-                } catch (dbError) {
-                    console.error(`Failed to upsert journalist ${journalist.email}:`, dbError);
-                }
-            }
-        }
-
-        // 7. Update Progress & Save State
-        if (object.nextRegionOrCity) {
-            currentRegion = object.nextRegionOrCity;
-
-            // Save state to ProceduralMemory
-            // We need a 'toolId' for ProceduralMemory. We'll use a dummy one or find one.
-            // Since we don't have a dedicated tool record for this trigger task in the 'Tool' table,
-            // we will try to upsert by unique constraint if possible, but ProceduralMemory has @@unique([toolId]).
-            // If we can't easily use ProceduralMemory without a Tool, let's store it in DecisionLog or assume we can reuse a tool ID.
-            // ALTERNATIVE: Store in LongTermTask.description? No, that's the type.
-            // Let's create a specialized entry in ProceduralMemory. We need a valid toolId.
-            // Let's check if 'manage_long_term_task' tool exists in Tool table. If not, we can't link it.
-            // Safe fallback: Log to DecisionLog, and relying on finding the LAST DecisionLog for state is safer than failing foreign keys.
-
-            // However, the review asked for "queryable field".
-            // Let's try to update the 'LongTermTask' record itself if we can add a field or abuse 'description'? No.
-            // Let's stick to DecisionLog but reading the *latest* one for resumption.
-
-            await prisma.decisionLog.create({
-                data: {
+        // 1. Check status (wrapped in runTask)
+        const shouldContinue = await io.runTask(`check-status-${iterationCount}`, async () => {
+             const task = await prisma.longTermTask.findFirst({
+                where: {
                     userId: userId,
-                    taskId: taskRecord.id,
-                    decision: JSON.stringify({ action: "progress_update", nextRegion: currentRegion }),
+                    status: 'in_progress'
+                }
+            });
+            if (!task) return false;
+            if (Date.now() - startTime > maxDuration) {
+                 await prisma.longTermTask.update({
+                     where: { id: task.id },
+                     data: { status: 'completed' }
+                 });
+                 return false;
+            }
+            return true;
+        });
+
+        if (!shouldContinue) {
+            await io.logger.info("Task stopped or finished.");
+            isRunning = false;
+            break;
+        }
+
+        // 2. Web Search
+        const searchResults = await io.runTask(`search-${iterationCount}`, async () => {
+             const apiKey = process.env.TAVILY_API_KEY;
+             if (!apiKey) throw new Error("Missing Tavily API Key");
+
+             const response = await fetch('https://api.tavily.com/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ api_key: apiKey, query: currentQuery, max_results: 5 }),
+              });
+              if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+              const data = await response.json();
+              return data.results;
+        });
+
+        if (searchResults.length > 0) {
+             // 3. Extract Data using LLM
+            const extraction = await io.runTask(`extract-${iterationCount}`, async () => {
+                const smartModel = google('gemini-1.5-pro-latest');
+                const result = await generateObject({
+                    model: smartModel,
+                    schema: z.object({
+                        journalists: z.array(z.object({
+                            name: z.string(),
+                            email: z.string().email(),
+                            outlet: z.string().optional(),
+                            role: z.string().optional(),
+                        })),
+                        nextQuery: z.string().describe("Suggest the next query to find more journalists in a different region or city."),
+                    }),
+                    prompt: `Extract journalist information from the following search results: ${JSON.stringify(searchResults)}. Also suggest a next search query to continue coverage of Polish cities/regions. Current query was: ${currentQuery}`
+                });
+                return result.object;
+            });
+
+            const { journalists, nextQuery } = extraction;
+
+            // 4. Upsert into DB
+            await io.runTask(`upsert-${iterationCount}`, async () => {
+                 for (const journalist of journalists) {
+                    try {
+                        await prisma.journalist.upsert({
+                            where: { email: journalist.email },
+                            update: {
+                                name: journalist.name,
+                                outlet: journalist.outlet,
+                                role: journalist.role,
+                            },
+                            create: {
+                                name: journalist.name,
+                                email: journalist.email,
+                                outlet: journalist.outlet,
+                                role: journalist.role,
+                            }
+                        });
+                    } catch (e) {
+                         // Ignore duplicate errors
+                         console.warn(`Failed to upsert ${journalist.email}`);
+                    }
                 }
             });
 
-            // ALSO: Update the in-memory state variable for the loop.
+            // 5. Update State
+            await io.runTask(`save-state-${iterationCount}`, async () => {
+                 await prisma.proceduralMemory.upsert({
+                    where: { toolId: memoryKey },
+                    update: {
+                        steps: nextQuery,
+                        description: `Last processed query: ${searchResults[0]?.title || 'search result'}`
+                    },
+                    create: {
+                        toolId: memoryKey,
+                        steps: nextQuery,
+                        description: "Journalist Collector Progress"
+                    }
+                });
+            });
 
-            // For true resumption after restart, we need to read this back.
-            // I updated the step 2 above to read from ProceduralMemory.
-            // Let's try to upsert a ProceduralMemory if we can find a Tool ID.
-            // Since I cannot easily find a Tool ID without querying, and I can't rely on one existing...
-            // I will modify step 2 to read from the latest DecisionLog instead.
+            currentQuery = nextQuery;
+            await io.logger.info(`Next query: ${nextQuery}`);
+
+        } else {
+             // Blind retry strategy
+             currentQuery = "redakcja kontakt email";
+             await io.logger.warn("No results, trying generic query.");
         }
 
-      } catch (llmError) {
-          console.error("LLM extraction failed", llmError);
-      }
-
-      // Wait before next iteration
-      await wait.for({ seconds: 60 });
+        // Wait a bit before next iteration
+        await io.wait("wait-1-minute", 60);
     }
+
+    return { status: "finished" };
   },
 });

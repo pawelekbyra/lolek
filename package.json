@@ -9,12 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/google": "^2.0.44",
+    "@ai-sdk/google": "^2.0.43",
     "@ai-sdk/react": "^2.0.102",
     "@google/generative-ai": "^0.24.1",
     "@neondatabase/serverless": "^1.0.2",
     "@prisma/client": "^5.15.0",
-    "@trigger.dev/sdk": "^4.1.2",
+    "@trigger.dev/cli": "^3.3.12",
+    "@trigger.dev/nextjs": "^3.3.12",
+    "@trigger.dev/sdk": "^3.3.12",
     "@types/uuid": "^10.0.0",
     "ai": "^5.0.102",
     "autoprefixer": "^10.4.21",
