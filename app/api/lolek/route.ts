@@ -716,7 +716,7 @@ export async function POST(req: Request) {
           description: 'Executes a raw SQL query against the database. WARNING: This tool can cause irreversible data loss and should be used with extreme caution.',
           inputSchema: z.object({
             query: z.string().describe('The raw SQL query to execute.'),
-            parameters: z.array(z.any()).optional().describe('An array of parameters to pass to the query.'),
+            parameters: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional().describe('An array of parameters to pass to the query.'),
             confirm: z.boolean().optional().default(false).describe('Wymagane potwierdzenie użytkownika. Ustaw na true, jeśli użytkownik zatwierdził akcję.'),
           }),
           execute: async ({ query, parameters, confirm }) => {
