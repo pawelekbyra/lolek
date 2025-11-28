@@ -16,6 +16,7 @@ import { getEmbedding } from '../../../lib/embedding';
 import { PrismaClient } from '@prisma/client';
 import { spawn } from 'child_process';
 import vm from 'vm';
+import { tasks } from '@trigger.dev/sdk/v3';
 
 const prisma = new PrismaClient();
 export const dynamic = 'force-dynamic';
@@ -881,6 +882,69 @@ export async function POST(req: Request) {
               console.error(`Error in manage_resource for ${modelName}.${finalAction}:`, error);
               return { error: `Operation failed: ${error.message}`, stack: error.stack };
             }
+          },
+        }),
+        manage_long_term_task: tool({
+          description: 'Zarządza długotrwałymi zadaniami: rozpoczęcie, zatrzymanie lub sprawdzenie statusu (np. Journal Collector).',
+          inputSchema: z.object({
+              action: z.enum(['start', 'stop', 'status']).describe('Akcja do wykonania.'),
+              taskType: z.enum(['JournalistCollector']).describe('Typ zadania (domyślnie JournalistCollector).'),
+              userId: z.string().describe('ID użytkownika, dla którego zadanie jest uruchamiane/zatrzymywane.'),
+              initialRegion: z.string().optional().describe('Opcjonalny region startowy dla zadania.'),
+          }),
+          execute: async ({ action, taskType, userId, initialRegion }) => {
+              try {
+                  // 1. Zlokalizuj/Utwórz rekord LongTermTask dla userId i taskType.
+                  let taskRecord = await prisma.longTermTask.findFirst({
+                      where: {
+                          userId: userId,
+                          description: taskType,
+                      },
+                  });
+
+                  if (!taskRecord) {
+                      taskRecord = await prisma.longTermTask.create({
+                          data: {
+                              userId: userId,
+                              description: taskType,
+                              status: 'pending',
+                          },
+                      });
+                  }
+
+                  // 2. Obsługa akcji
+                  if (action === 'start') {
+                      await prisma.longTermTask.update({
+                          where: { id: taskRecord.id },
+                          data: { status: 'in_progress' },
+                      });
+
+                      // Trigger the task
+                      const handle = await tasks.trigger("journalist-collector", { userId, initialRegion });
+
+                      return {
+                          status: 'started',
+                          message: `Zadanie ${taskType} zostało uruchomione (Trigger ID: ${handle.id}).`,
+                          taskId: taskRecord.id
+                      };
+
+                  } else if (action === 'stop') {
+                      await prisma.longTermTask.update({
+                          where: { id: taskRecord.id },
+                          data: { status: 'stopped' },
+                      });
+                      return { status: 'stopped', message: `Zadanie ${taskType} zostało zatrzymane.` };
+
+                  } else if (action === 'status') {
+                      return {
+                          status: taskRecord.status,
+                          taskId: taskRecord.id,
+                          lastUpdated: taskRecord.updatedAt
+                      };
+                  }
+              } catch (error: any) {
+                  return { error: `Błąd zarządzania zadaniem: ${error.message}` };
+              }
           },
         }),
       },
