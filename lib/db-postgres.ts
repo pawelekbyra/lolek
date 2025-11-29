@@ -75,6 +75,14 @@ export async function getChatMessages(sessionId: string): Promise<any[]> {
 export async function addChatMessage(sessionId: string, userId: string, role: string, content: string): Promise<void> {
     const sql = getDb();
     try {
+        // Ensure the user exists. If not, create a placeholder user.
+        // The email field is required and unique, so we generate a dummy one for anonymous users.
+        await sql`
+            INSERT INTO "users" (id, email)
+            VALUES (${userId}, ${`anonymous-${userId}@example.com`})
+            ON CONFLICT (id) DO NOTHING;
+        `;
+
         // Ensure conversation exists for the session, creating it if necessary
         await sql`
             INSERT INTO "Conversation" (id, "userId")
