@@ -3,7 +3,24 @@ Lolek - Autonomiczny Agent AI (Next.js + Vercel AI SDK)Lolek to zaawansowany age
 yarn install
 # lub
 pnpm install
-Skonfiguruj zmienne środowiskowe:Skopiuj .env.example do .env.local i uzupełnij klucze (OpenAI/Gemini, Postgres, E2B, etc.).Uruchom serwer deweloperski:npm run dev
+Skonfiguruj zmienne środowiskowe:
+
+### Konfiguracja Bazy Danych (Krytyczne!)
+
+Projekt używa Prisma do komunikacji z bazą danych Postgres (Neon). Aby operacje takie jak `prisma migrate` działały poprawnie, **musisz** skonfigurować **dwie** zmienne środowiskowe w pliku `.env`:
+
+-   `DATABASE_URL`: Główny URL połączenia, używany przez aplikację.
+-   `DATABASE_URL_UNPOOLED`: URL bez puli połączeń, wymagany przez narzędzia migracji Prisma.
+
+**Przykład:**
+```
+DATABASE_URL="postgres://user:password@host:port/database?sslmode=require"
+DATABASE_URL_UNPOOLED="postgres://user:password@host-unpooled:port/database?sslmode=require"
+```
+
+Skopiuj .env.example do .env.local i uzupełnij klucze (OpenAI/Gemini, Postgres, E2B, etc.).
+
+Uruchom serwer deweloperski:npm run dev
 Otwórz http://localhost:3000 w przeglądarce.🧭 Kompas Technologiczny (Strategia 2025)Poniższa sekcja definiuje "Złoty Standard" konfiguracji dla agenta Lolek, oparty o analizę architektury systemów autonomicznych.1. FUNDAMENT: Generative UI (GenUI) 2.0Cel: Pełna interaktywność i eliminacja migotania interfejsu.Zamiast renderowania po stronie serwera (streamUI), projekt migruje na Client-Side Tool Rendering.Mechanizm: Hook useChat z Vercel AI SDK po stronie klienta.Przepływ:Model decyduje o wywołaniu narzędzia (np. showWeather).Serwer zwraca dane JSON + intencję.Klient (React) renderuje komponent wizualny (np. <WeatherCard />) w miejscu wywołania.// Wzorzec implementacji w LolekChat.tsx
 const { messages } = useChat();
 
