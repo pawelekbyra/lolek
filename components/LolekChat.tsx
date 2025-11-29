@@ -16,24 +16,15 @@ type LolekChatProps = {
   onArtifactGenerated: (artifact: Omit<Artifact, 'id' | 'isVisible'>) => void;
 };
 
-const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
+// Inner component that handles the actual chat interface and useChat hook
+const ChatInterface = ({
+  onArtifactGenerated,
+  userId,
+  sessionId
+}: LolekChatProps & { userId: string, sessionId: string }) => {
   const [input, setInput] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [sessionId] = useState(uuidv4());
-  const [userId, setUserId] = useState<string>('');
-
-  useEffect(() => {
-    // Generate or retrieve userId from localStorage
-    if (typeof window !== 'undefined') {
-      let storedUserId = localStorage.getItem('lolek_user_id');
-      if (!storedUserId) {
-        storedUserId = uuidv4();
-        localStorage.setItem('lolek_user_id', storedUserId);
-      }
-      setUserId(storedUserId);
-    }
-  }, []);
 
   const { messages, setMessages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
@@ -50,8 +41,6 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
   });
 
   useEffect(() => {
-    if (!userId) return; // Wait for userId to be initialized
-
     const fetchHistory = async () => {
       // Pass userId if the history endpoint supports it, otherwise keep it simple
       const response = await fetch(`/api/lolek/history?session_id=${sessionId}`);
@@ -179,16 +168,9 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
                     }
 
                     // Check for approval requirement
-                    // In new SDK, result is in `output` property of the part
-                    // And we need to check if it's in 'output-available' state
                     if ('output' in part && part.output && typeof part.output === 'object') {
                         const result = part.output as any;
                          if (result !== null && 'status' in result && result.status === 'requires_approval') {
-                             // Arguments are in `args` of result, or maybe `part.input`?
-                             // The original code used `result.args`. Let's assume the tool output returns args.
-                             // But usually args are in `part.input`.
-                             // However, if the tool returned `requires_approval`, it might have passed args back in the result for confirmation.
-                             // Let's use result.args if available, otherwise part.input.
                              const args = result.args || ('input' in part ? part.input : {});
 
                              return (
@@ -203,11 +185,6 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
                          }
                     }
 
-                    // For PlaceholderToolCard, we need to pass the toolCall.
-                    // The old code passed `part`.
-                    // The new part structure might be different but hopefully compatible enough or mapped.
-                    // Let's try passing part as is, casting if necessary, or check PlaceholderToolCard.
-                    // For now, pass part as any to avoid type errors, or construct a compatible object.
                     return <PlaceholderToolCard key={i} toolCall={part as any} />;
                 }
               })}
@@ -252,6 +229,36 @@ const LolekChat = ({ onArtifactGenerated }: LolekChatProps) => {
       </form>
     </div>
   );
+};
+
+// Wrapper component to handle userId initialization
+const LolekChat = (props: LolekChatProps) => {
+  const [sessionId] = useState(uuidv4());
+  const [userId, setUserId] = useState<string>('');
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    // Generate or retrieve userId from localStorage
+    if (typeof window !== 'undefined') {
+      let storedUserId = localStorage.getItem('lolek_user_id');
+      if (!storedUserId) {
+        storedUserId = uuidv4();
+        localStorage.setItem('lolek_user_id', storedUserId);
+      }
+      setUserId(storedUserId);
+      setIsInitialized(true);
+    }
+  }, []);
+
+  if (!isInitialized || !userId) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="text-gray-500">Initializing Lolek...</div>
+      </div>
+    );
+  }
+
+  return <ChatInterface {...props} userId={userId} sessionId={sessionId} />;
 };
 
 export default LolekChat;
