@@ -18,6 +18,14 @@ DATABASE_URL="postgres://user:password@host:port/database?sslmode=require"
 DATABASE_URL_UNPOOLED="postgres://user:password@host-unpooled:port/database?sslmode=require"
 ```
 
+### Rozwiązywanie problemów z migracjami
+
+Jeśli migracja zakończy się niepowodzeniem (np. "failed in the target database"), użyj poniższej komendy (z poprawnymi credentialami w `.env`), aby oznaczyć ją jako rozwiązaną:
+
+```bash
+npx prisma migrate resolve --rolled-back "NAZWA_MIGRACJI"
+```
+
 Skopiuj .env.example do .env.local i uzupełnij klucze (OpenAI/Gemini, Postgres, E2B, etc.).
 
 Uruchom serwer deweloperski:npm run dev
