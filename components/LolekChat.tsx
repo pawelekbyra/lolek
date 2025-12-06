@@ -11,6 +11,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import TippingGateway from './chat/TippingGateway';
+import CommentSection from './chat/CommentSection';
 
 type LolekChatProps = {
   onArtifactGenerated: (artifact: Omit<Artifact, 'id' | 'isVisible'>) => void;
@@ -25,6 +27,7 @@ const ChatInterface = ({
   const [input, setInput] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showTippingGateway, setShowTippingGateway] = useState(false);
 
   const { messages, setMessages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
@@ -191,7 +194,16 @@ const ChatInterface = ({
             </div>
           </div>
         ))}
+        <CommentSection />
       </div>
+      {showTippingGateway && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-8 rounded-lg">
+            <TippingGateway />
+            <button onClick={() => setShowTippingGateway(false)}>Close</button>
+          </div>
+        </div>
+      )}
       <form
         onSubmit={handleSubmit}
         className="p-4 border-t bg-white flex items-center"
@@ -225,6 +237,14 @@ const ChatInterface = ({
           disabled={(!input.trim() && !file) || status !== 'ready'}
         >
           Send
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowTippingGateway(true)}
+          className="ml-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
+          disabled={status !== 'ready'}
+        >
+          Tip
         </button>
       </form>
     </div>
